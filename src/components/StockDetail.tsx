@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { StockWithSignalCounts, TimeFrame, Signal } from '@/lib/types';
@@ -82,13 +81,7 @@ const TradingViewWidget: React.FC<{
               }
             }
           ],
-          saved_data: {
-            studies_overrides: {
-              "MACD@tv-basicstudies.histogram.color": "#00F",
-              "MACD@tv-basicstudies.signal.color": "#F00",
-              "MACD@tv-basicstudies.macd.color": "#0F0",
-            }
-          },
+          save_image: false,
           // Define function to handle widget ready event
           onChartReady: function() {
             chartReadyRef.current = true;
@@ -199,8 +192,8 @@ const TradingViewWidget: React.FC<{
   };
 
   return (
-    <div ref={containerRef}>
-      <div id="tradingview_widget" className="w-full h-[500px] rounded-lg border border-border"></div>
+    <div ref={containerRef} className="w-full h-[500px]">
+      <div id="tradingview_widget" className="w-full h-full rounded-lg border border-border"></div>
     </div>
   );
 };
@@ -322,7 +315,6 @@ const StockDetail: React.FC = () => {
           </div>
 
           <div className="mb-8">
-            {/* Pass the selected signals and timeframe to the TradingView widget */}
             <TradingViewWidget 
               symbol={stock.symbol} 
               signals={stock.signals.flatMap(s => s.signals)}
