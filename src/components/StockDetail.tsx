@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { StockWithSignalCounts, TimeFrame } from '@/lib/types';
@@ -11,6 +10,42 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
+
+const TradingViewWidget: React.FC<{ symbol: string }> = ({ symbol }) => {
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/tv.js';
+    script.async = true;
+    script.onload = () => {
+      if (typeof window.TradingView !== 'undefined') {
+        new window.TradingView.widget({
+          autosize: true,
+          symbol: symbol,
+          interval: 'D',
+          timezone: 'Etc/UTC',
+          theme: 'light',
+          style: '1',
+          locale: 'en',
+          toolbar_bg: '#f1f3f6',
+          enable_publishing: false,
+          allow_symbol_change: true,
+          container_id: 'tradingview_widget'
+        });
+      }
+    };
+    document.head.appendChild(script);
+
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, [symbol]);
+
+  return (
+    <div id="tradingview_widget" className="w-full h-[500px] rounded-lg border border-border"></div>
+  );
+};
 
 const StockDetail: React.FC = () => {
   const { symbol } = useParams<{ symbol: string }>();
@@ -129,11 +164,7 @@ const StockDetail: React.FC = () => {
           </div>
 
           <div className="mb-8">
-            <iframe 
-              src={`https://www.tradingview.com/chart/?symbol=${stock.symbol}&interval=D&theme=light`}
-              className="w-full h-[500px] rounded-lg border border-border"
-              title={`${stock.symbol} Chart`}
-            ></iframe>
+            <TradingViewWidget symbol={stock.symbol} />
           </div>
 
           <Tabs defaultValue="signals" className="w-full">
@@ -227,5 +258,13 @@ const StockDetail: React.FC = () => {
     </div>
   );
 };
+
+declare global {
+  interface Window {
+    TradingView: {
+      widget: any;
+    };
+  }
+}
 
 export default StockDetail;
