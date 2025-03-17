@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { StockWithSignalCounts, TimeFrame, Signal } from '@/lib/types';
+import { StockWithSignalCounts, TimeFrame } from '@/lib/types';
 import { getStockBySymbol, getTimeFrames } from '@/lib/stockService';
 import { formatPercent, formatPrice } from '@/lib/macdService';
 import SignalIndicator from '@/components/SignalIndicator';
@@ -9,48 +10,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
-import { ArrowLeft, ExternalLink, ArrowUp, ArrowDown, Triangle } from 'lucide-react';
+import { ArrowLeft, ExternalLink } from 'lucide-react';
 
-const TradingViewWidget: React.FC<{ 
-  symbol: string; 
-  signals: Signal[];
-  timeFrame: TimeFrame;
-}> = ({ symbol, signals, timeFrame }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const widgetRef = useRef<any>(null);
-  const chartReadyRef = useRef(false);
-  
-  // Map timeframes to TradingView intervals
-  const mapTimeFrameToInterval = (tf: TimeFrame): string => {
-    switch(tf) {
-      case '1D': return 'D';
-      case '3D': return '3D';
-      case '1W': return 'W';
-      case '2W': return '2W';
-      case '1M': return 'M';
-      case '3M': return '3M';
-      case '6M': return '6M';
-      case '1Y': return '12M';
-      default: return 'D';
-    }
-  };
-
+const TradingViewWidget: React.FC<{ symbol: string }> = ({ symbol }) => {
   useEffect(() => {
     const script = document.createElement('script');
     script.src = 'https://s3.tradingview.com/tv.js';
     script.async = true;
     script.onload = () => {
-      if (typeof window.TradingView !== 'undefined' && containerRef.current) {
-        // Clear any existing widget
-        if (containerRef.current) {
-          containerRef.current.innerHTML = '';
-        }
-        
-        // Create new widget
-        widgetRef.current = new window.TradingView.widget({
+      if (typeof window.TradingView !== 'undefined') {
+        new window.TradingView.widget({
           autosize: true,
           symbol: symbol,
-          interval: mapTimeFrameToInterval(timeFrame),
+          interval: 'D',
           timezone: 'Etc/UTC',
           theme: 'light',
           style: '1',
@@ -80,13 +52,7 @@ const TradingViewWidget: React.FC<{
                 signalLength: 9,
               }
             }
-          ],
-          save_image: false,
-          // Define function to handle widget ready event
-          onChartReady: function() {
-            chartReadyRef.current = true;
-            addSignalMarkers();
-          }
+          ]
         });
       }
     };
@@ -97,104 +63,10 @@ const TradingViewWidget: React.FC<{
         document.head.removeChild(script);
       }
     };
-  }, [symbol, timeFrame]);
-
-  // Add signal markers when signals change or chart becomes ready
-  useEffect(() => {
-    if (chartReadyRef.current) {
-      addSignalMarkers();
-    }
-  }, [signals, timeFrame]);
-
-  const addSignalMarkers = () => {
-    if (!widgetRef.current || !chartReadyRef.current) return;
-
-    // First clear existing markers
-    try {
-      const chart = widgetRef.current.chart();
-      chart.clearMarks();
-      
-      // Only show active signals
-      const activeSignals = signals.filter(signal => 
-        signal.value && signal.timeFrame === timeFrame
-      );
-      
-      if (activeSignals.length === 0) return;
-      
-      // Add markers for each active signal
-      activeSignals.forEach(signal => {
-        let options: any = {};
-        
-        switch(signal.type) {
-          case 'MACD_CROSSOVER':
-            options = {
-              text: 'MACD ↑',
-              shape: 'arrow_up',
-              color: '#22c55e',
-              size: 2,
-              position: 'belowBar'
-            };
-            break;
-          case 'MACD_CROSSUNDER':
-            options = {
-              text: 'MACD ↓',
-              shape: 'arrow_down',
-              color: '#ef4444',
-              size: 2,
-              position: 'aboveBar'
-            };
-            break;
-          case 'SIGNAL_ABOVE_ZERO':
-            options = {
-              text: 'Above 0',
-              shape: 'circle',
-              color: '#22c55e',
-              size: 1,
-              position: 'belowBar'
-            };
-            break;
-          case 'SIGNAL_BELOW_ZERO':
-            options = {
-              text: 'Below 0',
-              shape: 'circle',
-              color: '#ef4444',
-              size: 1,
-              position: 'aboveBar'
-            };
-            break;
-          case 'HISTOGRAM_POSITIVE':
-            options = {
-              text: 'Hist +',
-              shape: 'diamond',
-              color: '#22c55e',
-              size: 1,
-              position: 'belowBar'
-            };
-            break;
-          case 'HISTOGRAM_NEGATIVE':
-            options = {
-              text: 'Hist -',
-              shape: 'diamond',
-              color: '#ef4444',
-              size: 1,
-              position: 'aboveBar'
-            };
-            break;
-        }
-        
-        // Parse the date to timestamp for the mark
-        const date = new Date(signal.date);
-        chart.createMark(date.getTime(), options);
-      });
-    } catch (err) {
-      console.error('Error adding signal markers:', err);
-    }
-  };
+  }, [symbol]);
 
   return (
-    <div ref={containerRef} className="w-full h-[500px]">
-      <div id="tradingview_widget" className="w-full h-full rounded-lg border border-border"></div>
-    </div>
+    <div id="tradingview_widget" className="w-full h-[500px] rounded-lg border border-border"></div>
   );
 };
 
@@ -315,34 +187,7 @@ const StockDetail: React.FC = () => {
           </div>
 
           <div className="mb-8">
-            <TradingViewWidget 
-              symbol={stock.symbol} 
-              signals={stock.signals.flatMap(s => s.signals)}
-              timeFrame={selectedTimeFrame}
-            />
-          </div>
-
-          <div className="mb-4">
-            <h3 className="text-lg font-medium mb-2">Chart Timeframe</h3>
-            <div className="flex flex-wrap gap-2">
-              {timeFrames.map(tf => (
-                <Button
-                  key={tf}
-                  variant={selectedTimeFrame === tf ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setSelectedTimeFrame(tf)}
-                  className="rounded-full"
-                >
-                  {tf}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-2">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium">Signal Indicators:</span> Look for signal markers on the chart that indicate active MACD signals
-            </p>
+            <TradingViewWidget symbol={stock.symbol} />
           </div>
 
           <Tabs defaultValue="signals" className="w-full">
