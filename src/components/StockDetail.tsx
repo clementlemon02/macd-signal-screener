@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { StockWithSignalCounts, TimeFrame } from '@/lib/types';
@@ -30,29 +29,7 @@ const TradingViewWidget: React.FC<{ symbol: string }> = ({ symbol }) => {
           toolbar_bg: '#f1f3f6',
           enable_publishing: false,
           allow_symbol_change: true,
-          container_id: 'tradingview_widget',
-          studies: [
-            {
-              id: 'MAExp@tv-basicstudies',
-              inputs: {
-                length: 12,
-              }
-            },
-            {
-              id: 'MAExp@tv-basicstudies',
-              inputs: {
-                length: 26,
-              }
-            },
-            {
-              id: 'MACD@tv-basicstudies',
-              inputs: {
-                fastLength: 12,
-                slowLength: 26,
-                signalLength: 9,
-              }
-            }
-          ]
+          container_id: 'tradingview_widget'
         });
       }
     };
