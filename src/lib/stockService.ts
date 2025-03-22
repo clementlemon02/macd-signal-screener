@@ -1,4 +1,3 @@
-
 import { Stock, StockWithSignalCounts, SortConfig, TimeFrame, MacdData } from './types';
 import { mockStocks } from './mockData';
 import { calculateSignalCounts, sortStocks } from './macdService';
@@ -67,7 +66,7 @@ export const getSortedStocks = (
 
 // Get available timeframes
 export const getTimeFrames = (): TimeFrame[] => {
-  return ['1D', '3D', '1W', '2W', '1M', '3M', '6M', '1Y'];
+  return ['1D', '3D', '1W', '2W', '1M', '3M', '6M', '1Y', '2Y', '3Y'];
 };
 
 // Get a single stock by symbol

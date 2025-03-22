@@ -1,7 +1,6 @@
-
 import { Stock, Signal, SignalType, TimeFrame, MacdData } from './types';
 
-const timeFrames: TimeFrame[] = ['1D', '3D', '1W', '2W', '1M', '3M', '6M', '1Y'];
+const timeFrames: TimeFrame[] = ['1D', '3D', '1W', '2W', '1M', '3M', '6M', '1Y', '2Y', '3Y'];
 
 const signalTypes: SignalType[] = [
   'MACD_CROSSOVER',
@@ -12,8 +11,6 @@ const signalTypes: SignalType[] = [
   'HISTOGRAM_NEGATIVE'
 ];
 
-// Helper function to generate random boolean values for signals with
-// a slightly higher probability of positive signals for some stocks
 const generateRandomSignals = (timeFrame: TimeFrame, bias: number = 0.5): Signal[] => {
   return signalTypes.map(type => ({
     type,
@@ -23,7 +20,6 @@ const generateRandomSignals = (timeFrame: TimeFrame, bias: number = 0.5): Signal
   }));
 };
 
-// Generate mock MACD history data
 const generateMockMacdHistory = (): MacdData[] => {
   const data: MacdData[] = [];
   let macdLine = Math.random() * 2 - 1;
@@ -35,11 +31,9 @@ const generateMockMacdHistory = (): MacdData[] => {
     const date = new Date(now);
     date.setDate(date.getDate() - i);
     
-    // Create some random movement
     macdLine += (Math.random() - 0.5) * 0.4;
     signalLine += (Math.random() - 0.5) * 0.2;
     
-    // Tend to converge/diverge occasionally
     if (Math.random() > 0.8) {
       signalLine = (signalLine + macdLine) / 2;
     }
@@ -57,7 +51,6 @@ const generateMockMacdHistory = (): MacdData[] => {
   return data;
 };
 
-// Generate stock mock data with random signals
 export const generateMockStocks = (count: number = 20): Stock[] => {
   const stockSymbols = [
     { symbol: 'AAPL', name: 'Apple Inc.' },
@@ -88,7 +81,6 @@ export const generateMockStocks = (count: number = 20): Stock[] => {
   ];
 
   return stockSymbols.slice(0, count).map((stock, index) => {
-    // Create a bias that varies by stock to make some stocks appear "better" than others
     const bias = 0.3 + (index % 5) * 0.15;
     
     return {

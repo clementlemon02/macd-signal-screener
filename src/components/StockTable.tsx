@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { StockWithSignalCounts, TimeFrame, SortConfig, SortField, SortDirection } from '@/lib/types';
@@ -32,10 +31,8 @@ const StockTable: React.FC = () => {
   const { watchlist } = useWatchlist();
   const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
   
-  // We still need timeFrames for the table headers
   const timeFrames = useMemo(() => getTimeFrames(), []);
-  // For initial display, use a smaller set of default timeframes
-  const defaultTimeFrames: TimeFrame[] = ['1D', '1W', '1M'];
+  const displayTimeFrames: TimeFrame[] = ['1D', '1W', '1M', '3M', '6M', '1Y', '2Y', '3Y'];
 
   const loadStocks = async () => {
     setLoading(true);
@@ -60,10 +57,8 @@ const StockTable: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Filter and sort stocks when searchQuery, sortConfig, or watchlist changes
     let filtered = stocks;
     
-    // Filter by search query
     if (searchQuery) {
       filtered = filtered.filter(stock => 
         stock.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -71,7 +66,6 @@ const StockTable: React.FC = () => {
       );
     }
     
-    // Filter by watchlist if enabled
     if (showWatchlistOnly) {
       filtered = filtered.filter(stock => watchlist.includes(stock.symbol));
     }
@@ -193,7 +187,7 @@ const StockTable: React.FC = () => {
                     onSort={handleSort}
                     className="w-24"
                   />
-                  {defaultTimeFrames.map(timeFrame => (
+                  {displayTimeFrames.map(timeFrame => (
                     <StockHeaderCell 
                       key={timeFrame}
                       label={timeFrame} 
@@ -211,7 +205,7 @@ const StockTable: React.FC = () => {
               <tbody className="bg-background divide-y divide-border">
                 {filteredStocks.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={8 + displayTimeFrames.length} className="px-4 py-8 text-center text-muted-foreground">
                       {searchQuery || showWatchlistOnly 
                         ? 'No matching stocks found' 
                         : 'No stocks available'}
@@ -239,7 +233,7 @@ const StockTable: React.FC = () => {
                           {formatPercent(stock.change)}
                         </span>
                       </td>
-                      {defaultTimeFrames.map(timeFrame => {
+                      {displayTimeFrames.map(timeFrame => {
                         const timeframeSignals = stock.signals.find(
                           s => s.timeFrame === timeFrame
                         )?.signals || [];
