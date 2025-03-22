@@ -6,14 +6,18 @@ import { fetchStocks, getTimeFrames, getSortedStocks } from '@/lib/stockService'
 import { formatPercent, formatPrice } from '@/lib/macdService';
 import SignalIndicator from '@/components/SignalIndicator';
 import StockHeaderCell from '@/components/StockHeaderCell';
-import TimeframeSelector from '@/components/TimeframeSelector';
 import MacdMiniChart from '@/components/MacdMiniChart';
+import WatchlistButton from '@/components/WatchlistButton';
+import ThemeToggle from '@/components/ThemeToggle';
+import { useWatchlist } from '@/context/WatchlistContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { useToast } from '@/components/ui/use-toast';
-import { Search, RefreshCw } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Search, RefreshCw, ListFilter } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 const DEFAULT_SORT: SortConfig = { field: '1D', direction: 'desc' };
 
@@ -23,11 +27,15 @@ const StockTable: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
-  const [selectedTimeFrames, setSelectedTimeFrames] = useState<TimeFrame[]>(getTimeFrames());
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { watchlist } = useWatchlist();
+  const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
   
+  // We still need timeFrames for the table headers
   const timeFrames = useMemo(() => getTimeFrames(), []);
+  // For initial display, use a smaller set of default timeframes
+  const defaultTimeFrames: TimeFrame[] = ['1D', '1W', '1M'];
 
   const loadStocks = async () => {
     setLoading(true);
@@ -52,17 +60,24 @@ const StockTable: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Filter and sort stocks when searchQuery, sortConfig, or selectedTimeFrames changes
-    const filtered = stocks.filter(stock => {
-      return (
-        (searchQuery === '' || 
-          stock.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          stock.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    // Filter and sort stocks when searchQuery, sortConfig, or watchlist changes
+    let filtered = stocks;
+    
+    // Filter by search query
+    if (searchQuery) {
+      filtered = filtered.filter(stock => 
+        stock.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        stock.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
-    });
+    }
+    
+    // Filter by watchlist if enabled
+    if (showWatchlistOnly) {
+      filtered = filtered.filter(stock => watchlist.includes(stock.symbol));
+    }
     
     setFilteredStocks(getSortedStocks(filtered, sortConfig));
-  }, [stocks, searchQuery, sortConfig, selectedTimeFrames]);
+  }, [stocks, searchQuery, sortConfig, watchlist, showWatchlistOnly]);
 
   const handleSort = (field: SortField) => {
     setSortConfig(prevConfig => ({
@@ -80,47 +95,61 @@ const StockTable: React.FC = () => {
     });
   };
 
-  const handleTimeFrameChange = (timeFrames: TimeFrame[]) => {
-    setSelectedTimeFrames(timeFrames);
-  };
-
   const handleRowClick = (symbol: string) => {
     navigate(`/stock/${symbol}`);
+  };
+
+  const toggleWatchlistFilter = () => {
+    setShowWatchlistOnly(!showWatchlistOnly);
   };
 
   return (
     <div className="w-full space-y-6 px-4 sm:px-6">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <h1 className="text-2xl font-bold sm:text-3xl">MACD Signal Screener</h1>
-        <div className="flex gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              type="text"
-              placeholder="Search stocks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9"
-            />
+        <div className="flex items-center gap-4">
+          <ThemeToggle />
+          <div className="flex gap-2">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                type="text"
+                placeholder="Search stocks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-9"
+              />
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefresh}
+              disabled={loading}
+              className="h-9 flex items-center gap-1"
+            >
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
           </div>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleRefresh}
-            disabled={loading}
-            className="h-9 flex items-center gap-1"
-          >
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-            <span className="hidden sm:inline">Refresh</span>
-          </Button>
         </div>
       </div>
 
-      <TimeframeSelector
-        timeFrames={timeFrames}
-        selectedTimeFrames={selectedTimeFrames}
-        onTimeFrameChange={handleTimeFrameChange}
-      />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="watchlist-filter"
+            checked={showWatchlistOnly}
+            onCheckedChange={toggleWatchlistFilter}
+          />
+          <Label htmlFor="watchlist-filter" className="cursor-pointer">Show watchlist only</Label>
+        </div>
+        
+        {showWatchlistOnly && watchlist.length === 0 && (
+          <div className="text-sm text-muted-foreground">
+            Your watchlist is empty. Add stocks by clicking the star icon.
+          </div>
+        )}
+      </div>
 
       <div className="glass-card rounded-lg overflow-hidden">
         {loading ? (
@@ -133,6 +162,9 @@ const StockTable: React.FC = () => {
             <table className="min-w-full divide-y divide-border">
               <thead className="bg-muted/30">
                 <tr>
+                  <th className="px-2 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-8">
+                    {/* Empty header for watchlist column */}
+                  </th>
                   <StockHeaderCell 
                     label="Symbol" 
                     field="symbol" 
@@ -161,7 +193,7 @@ const StockTable: React.FC = () => {
                     onSort={handleSort}
                     className="w-24"
                   />
-                  {selectedTimeFrames.map(timeFrame => (
+                  {defaultTimeFrames.map(timeFrame => (
                     <StockHeaderCell 
                       key={timeFrame}
                       label={timeFrame} 
@@ -179,8 +211,10 @@ const StockTable: React.FC = () => {
               <tbody className="bg-background divide-y divide-border">
                 {filteredStocks.length === 0 ? (
                   <tr>
-                    <td colSpan={5 + selectedTimeFrames.length} className="px-4 py-8 text-center text-muted-foreground">
-                      {searchQuery ? 'No matching stocks found' : 'No stocks available'}
+                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                      {searchQuery || showWatchlistOnly 
+                        ? 'No matching stocks found' 
+                        : 'No stocks available'}
                     </td>
                   </tr>
                 ) : (
@@ -190,6 +224,9 @@ const StockTable: React.FC = () => {
                       className="stock-row hover:bg-muted/20 transition-colors cursor-pointer"
                       onClick={() => handleRowClick(stock.symbol)}
                     >
+                      <td className="px-2 py-3 text-center">
+                        <WatchlistButton symbol={stock.symbol} />
+                      </td>
                       <td className="px-4 py-3 text-sm font-medium">{stock.symbol}</td>
                       <td className="px-4 py-3 text-sm">{stock.name}</td>
                       <td className="px-4 py-3 text-sm">
@@ -202,7 +239,7 @@ const StockTable: React.FC = () => {
                           {formatPercent(stock.change)}
                         </span>
                       </td>
-                      {selectedTimeFrames.map(timeFrame => {
+                      {defaultTimeFrames.map(timeFrame => {
                         const timeframeSignals = stock.signals.find(
                           s => s.timeFrame === timeFrame
                         )?.signals || [];
