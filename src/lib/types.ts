@@ -21,12 +21,20 @@ export interface StockSignals {
   signals: Signal[];
 }
 
+export interface MacdData {
+  date: string;
+  macdLine: number;
+  signalLine: number;
+  histogram: number;
+}
+
 export interface Stock {
   symbol: string;
   name: string;
   price: number;
   change: number;
   signals: StockSignals[];
+  macdHistory: MacdData[]; // New field for historical MACD data
 }
 
 export interface TimeframeSignalCounts {

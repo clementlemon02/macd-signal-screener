@@ -7,6 +7,7 @@ import { formatPercent, formatPrice } from '@/lib/macdService';
 import SignalIndicator from '@/components/SignalIndicator';
 import StockHeaderCell from '@/components/StockHeaderCell';
 import TimeframeSelector from '@/components/TimeframeSelector';
+import MacdMiniChart from '@/components/MacdMiniChart';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -173,12 +174,15 @@ const StockTable: React.FC = () => {
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-20">
                     Chart
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-32">
+                    MACD (7d)
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-background divide-y divide-border">
                 {filteredStocks.length === 0 ? (
                   <tr>
-                    <td colSpan={5 + selectedTimeFrames.length} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={6 + selectedTimeFrames.length} className="px-4 py-8 text-center text-muted-foreground">
                       {searchQuery ? 'No matching stocks found' : 'No stocks available'}
                     </td>
                   </tr>
@@ -244,6 +248,13 @@ const StockTable: React.FC = () => {
                         >
                           <ChartLine className="h-4 w-4 text-muted-foreground hover:text-primary" />
                         </Button>
+                      </td>
+                      <td className="px-4 py-3">
+                        {stock.macdHistory && stock.macdHistory.length > 0 ? (
+                          <MacdMiniChart data={stock.macdHistory} />
+                        ) : (
+                          <div className="text-xs text-muted-foreground text-center">No data</div>
+                        )}
                       </td>
                     </tr>
                   ))

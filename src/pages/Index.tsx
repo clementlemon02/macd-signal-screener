@@ -5,7 +5,7 @@ import StockTable from '@/components/StockTable';
 const Index = () => {
   return (
     <div className="min-h-screen py-8">
-      <div className="container mx-auto">
+      <div className="container mx-auto px-2">
         <StockTable />
       </div>
     </div>
