@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/use-toast';
-import { Search, RefreshCw, ChartLine } from 'lucide-react';
+import { Search, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_SORT: SortConfig = { field: '1D', direction: 'desc' };
@@ -171,9 +171,6 @@ const StockTable: React.FC = () => {
                       className="w-24 text-center"
                     />
                   ))}
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-20">
-                    Chart
-                  </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-32">
                     MACD (7d)
                   </th>
@@ -182,7 +179,7 @@ const StockTable: React.FC = () => {
               <tbody className="bg-background divide-y divide-border">
                 {filteredStocks.length === 0 ? (
                   <tr>
-                    <td colSpan={6 + selectedTimeFrames.length} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={5 + selectedTimeFrames.length} className="px-4 py-8 text-center text-muted-foreground">
                       {searchQuery ? 'No matching stocks found' : 'No stocks available'}
                     </td>
                   </tr>
@@ -236,19 +233,6 @@ const StockTable: React.FC = () => {
                           </td>
                         );
                       })}
-                      <td className="px-4 py-3 text-center">
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          className="h-8 w-8 p-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(`https://www.tradingview.com/chart/?symbol=${stock.symbol}`, '_blank');
-                          }}
-                        >
-                          <ChartLine className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                        </Button>
-                      </td>
                       <td className="px-4 py-3">
                         {stock.macdHistory && stock.macdHistory.length > 0 ? (
                           <MacdMiniChart data={stock.macdHistory} />

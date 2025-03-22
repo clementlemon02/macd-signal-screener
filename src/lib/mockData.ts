@@ -1,5 +1,5 @@
 
-import { Stock, Signal, SignalType, TimeFrame } from './types';
+import { Stock, Signal, SignalType, TimeFrame, MacdData } from './types';
 
 const timeFrames: TimeFrame[] = ['1D', '3D', '1W', '2W', '1M', '3M', '6M', '1Y'];
 
@@ -21,6 +21,40 @@ const generateRandomSignals = (timeFrame: TimeFrame, bias: number = 0.5): Signal
     timeFrame,
     date: new Date().toISOString()
   }));
+};
+
+// Generate mock MACD history data
+const generateMockMacdHistory = (): MacdData[] => {
+  const data: MacdData[] = [];
+  let macdLine = Math.random() * 2 - 1;
+  let signalLine = Math.random() * 2 - 1;
+  
+  const now = new Date();
+  
+  for (let i = 30; i >= 0; i--) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+    
+    // Create some random movement
+    macdLine += (Math.random() - 0.5) * 0.4;
+    signalLine += (Math.random() - 0.5) * 0.2;
+    
+    // Tend to converge/diverge occasionally
+    if (Math.random() > 0.8) {
+      signalLine = (signalLine + macdLine) / 2;
+    }
+    
+    const histogram = macdLine - signalLine;
+    
+    data.push({
+      date: date.toISOString().split('T')[0],
+      macdLine,
+      signalLine,
+      histogram
+    });
+  }
+  
+  return data;
 };
 
 // Generate stock mock data with random signals
@@ -65,7 +99,8 @@ export const generateMockStocks = (count: number = 20): Stock[] => {
       signals: timeFrames.map(timeFrame => ({
         timeFrame,
         signals: generateRandomSignals(timeFrame, bias)
-      }))
+      })),
+      macdHistory: generateMockMacdHistory()
     };
   });
 };

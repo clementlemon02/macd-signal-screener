@@ -50,9 +50,17 @@ const MacdMiniChart: React.FC<MacdMiniChartProps> = ({
           {/* Histogram as bars */}
           <Bar 
             dataKey="histogram" 
-            fill={(d) => d.histogram >= 0 ? 'rgba(52, 211, 153, 0.8)' : 'rgba(248, 113, 113, 0.8)'} 
+            fill="#000" // Default fill
             isAnimationActive={false}
-          />
+          >
+            {chartData.map((entry, index) => (
+              <Bar 
+                key={`histogram-${index}`}
+                dataKey="histogram"
+                fill={entry.histogram >= 0 ? 'rgba(52, 211, 153, 0.8)' : 'rgba(248, 113, 113, 0.8)'}
+              />
+            ))}
+          </Bar>
           
           {/* Zero line */}
           <ReferenceLine y={0} stroke="#CBD5E1" strokeWidth={1} />
