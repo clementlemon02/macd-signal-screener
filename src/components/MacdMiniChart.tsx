@@ -12,7 +12,8 @@ import {
   Bar,
   ReferenceLine,
   ComposedChart,
-  Line
+  Line,
+  Cell
 } from 'recharts';
 
 interface MacdMiniChartProps {
@@ -50,13 +51,11 @@ const MacdMiniChart: React.FC<MacdMiniChartProps> = ({
           {/* Histogram as bars */}
           <Bar 
             dataKey="histogram" 
-            fill="#000" // Default fill
             isAnimationActive={false}
           >
             {chartData.map((entry, index) => (
-              <Bar 
-                key={`histogram-${index}`}
-                dataKey="histogram"
+              <Cell 
+                key={`cell-${index}`}
                 fill={entry.histogram >= 0 ? 'rgba(52, 211, 153, 0.8)' : 'rgba(248, 113, 113, 0.8)'}
               />
             ))}
