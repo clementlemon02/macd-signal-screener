@@ -25,10 +25,6 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
       - POLYGON_API_KEY=${POLYGON_API_KEY}
-      - PROJECT_NAME=MACD Signal Screener
-      - VERSION=1.0.0
-      - API_V1_STR=/api/v1
-      - BACKEND_CORS_ORIGINS=["http://localhost","http://localhost:80","http://localhost:3000","http://localhost:8080"]
     networks:
       - app-network
 
