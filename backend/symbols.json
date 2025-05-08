@@ -1,6 +1,10 @@
 {
     "crypto": [
-      "BTC",
-      "ETH/USD"
+      "BTC/USD",
+      "ETH/USD",
+      "XRP/USD",
+      "BNB/USD",
+      "SOL/USD",
+      "DOGE/USD"
     ]
 }

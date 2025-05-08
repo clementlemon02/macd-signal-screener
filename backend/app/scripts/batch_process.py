@@ -1,8 +1,7 @@
 import asyncio
 from datetime import datetime
 import json
-from app.services.signal_processor import signal_processor
-
+from app.services.batch_signal_processor import batch_signal_processor
 with open("symbols.json", "r") as f:
     data = json.load(f)
     symbols = data["crypto"]
@@ -16,7 +15,7 @@ async def process_signals():
         print(f"Processing batch: {batch}")
 
         try:
-            signals = await signal_processor.process_symbols(batch, '1day')
+            signals = await batch_signal_processor.process_symbols(batch, '1day')
             signals_by_symbol = {}
             for signal in signals:
                 symbol = signal['symbol']
@@ -29,7 +28,6 @@ async def process_signals():
                 print(f"Generated {signal_count} signals for {symbol}")
         except Exception as e:
             print(f"Error processing batch {batch}: {str(e)}")
-
 
 async def main():
     print(f"Starting signal processing at {datetime.now()}")
