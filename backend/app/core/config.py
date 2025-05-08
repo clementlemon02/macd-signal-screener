@@ -5,6 +5,8 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "MACD Signal Screener"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
+    TWELVEDATA_API_KEY: str
+    CMC_API_KEY: str
     
     # Polygon.io settings
     POLYGON_API_KEY: str

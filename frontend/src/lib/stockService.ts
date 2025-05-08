@@ -1,6 +1,6 @@
-import { Stock, StockWithSignalCounts, SortConfig, TimeFrame, MacdData } from './types';
-import { mockStocks } from './mockData';
+import { MacdData, SortConfig, Stock, StockWithSignalCounts, TimeFrame } from './types';
 import { calculateSignalCounts, sortStocks } from './macdService';
+import { fetchStocksFromSupabase, getStockBySymbolFromSupabase } from './supabaseService';
 
 // Generate random MACD data for the last 30 days
 const generateMacdHistory = (): MacdData[] => {
@@ -44,18 +44,6 @@ const addMacdHistoryToStocks = (stocks: Stock[]): Stock[] => {
   }));
 };
 
-// In a real application, this would fetch data from an API
-export const fetchStocks = async (): Promise<StockWithSignalCounts[]> => {
-  // Simulate API call with a delay
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const stocksWithMacd = addMacdHistoryToStocks(mockStocks);
-      const stocksWithCounts = stocksWithMacd.map(calculateSignalCounts);
-      resolve(stocksWithCounts);
-    }, 500);
-  });
-};
-
 // Get sorted and filtered stocks
 export const getSortedStocks = (
   stocks: StockWithSignalCounts[],
@@ -69,23 +57,14 @@ export const getTimeFrames = (): TimeFrame[] => {
   return ['1D', '3D', '1W', '2W', '1M', '3M', '6M', '1Y', '2Y', '3Y'];
 };
 
+// Fetch stocks from Supabase
+export const fetchStocks = async (): Promise<StockWithSignalCounts[]> => {
+  return fetchStocksFromSupabase();
+};
+
 // Get a single stock by symbol
 export const getStockBySymbol = async (
   symbol: string
 ): Promise<StockWithSignalCounts | undefined> => {
-  // Simulate API call
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const stock = mockStocks.find(stock => stock.symbol === symbol);
-      if (stock) {
-        const stockWithMacd = {
-          ...stock,
-          macdHistory: generateMacdHistory()
-        };
-        resolve(calculateSignalCounts(stockWithMacd));
-      } else {
-        resolve(undefined);
-      }
-    }, 300);
-  });
+  return getStockBySymbolFromSupabase(symbol);
 };

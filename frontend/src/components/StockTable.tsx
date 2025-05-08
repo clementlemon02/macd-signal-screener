@@ -175,7 +175,7 @@ const StockTable: React.FC = () => {
   };
 
   const handleRowClick = (symbol: string) => {
-    navigate(`/stock/${symbol}`);
+    navigate(`/stock/${encodeURIComponent(symbol)}`);
   };
 
   const toggleWatchlistFilter = () => {
@@ -384,9 +384,6 @@ const StockTable: React.FC = () => {
                     const prevDistance = Math.abs(prevMacd.macdLine - prevMacd.signalLine);
                     const isConverging = currentDistance < prevDistance;
                     
-                    // Calculate percentage change in distance
-                    const percentChange = ((prevDistance - currentDistance) / prevDistance) * 100;
-                    const absPercentChange = Math.abs(percentChange);
                     
                     return (
                     <tr 
@@ -475,9 +472,6 @@ const StockTable: React.FC = () => {
                           <div className="flex flex-col items-center">
                             <div className={`text-sm font-medium ${isConverging ? 'text-signal-positive' : 'text-signal-negative'}`}>
                               {isConverging ? 'Converging' : 'Diverging'}
-                            </div>
-                            <div className={`text-xs ${isConverging ? 'text-signal-positive' : 'text-signal-negative'}`}>
-                              {absPercentChange.toFixed(1)}%
                             </div>
                           </div>
                         </div>

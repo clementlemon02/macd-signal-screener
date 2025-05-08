@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { StockWithSignalCounts, TimeFrame } from '@/lib/types';
-import { getStockBySymbol, getTimeFrames } from '@/lib/stockService';
-import { formatPercent, formatPrice } from '@/lib/macdService';
-import SignalIndicator from '@/components/SignalIndicator';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { useToast } from '@/components/ui/use-toast';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useEffect, useState } from 'react';
+import { StockWithSignalCounts, TimeFrame } from '@/lib/types';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { formatPercent, formatPrice } from '@/lib/macdService';
+import { getStockBySymbol, getTimeFrames } from '@/lib/stockService';
+import { useNavigate, useParams } from 'react-router-dom';
+
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import SignalIndicator from '@/components/SignalIndicator';
+import { useToast } from '@/components/ui/use-toast';
 
 const TradingViewWidget: React.FC<{ symbol: string }> = ({ symbol }) => {
   useEffect(() => {
@@ -18,15 +19,20 @@ const TradingViewWidget: React.FC<{ symbol: string }> = ({ symbol }) => {
     script.async = true;
     script.onload = () => {
       if (typeof window.TradingView !== 'undefined') {
+        // Format symbol for TradingView
+        const formattedSymbol = symbol.includes('/') 
+          ? symbol.replace('/', '') // For crypto pairs like BTC/USD -> BTCUSD
+          : symbol;
+
         new window.TradingView.widget({
           autosize: true,
-          symbol: symbol,
+          symbol: formattedSymbol,
           interval: 'D',
           timezone: 'Etc/UTC',
-          theme: 'light',
+          theme: 'dark',
           style: '1',
           locale: 'en',
-          toolbar_bg: '#f1f3f6',
+          toolbar_bg: '#1E293B',
           enable_publishing: false,
           allow_symbol_change: true,
           save_image: true,
@@ -76,11 +82,11 @@ const TradingViewWidget: React.FC<{ symbol: string }> = ({ symbol }) => {
             "mainSeriesProperties.candleStyle.borderDownColor": "#ef4444",
             "mainSeriesProperties.candleStyle.wickUpColor": "#22c55e",
             "mainSeriesProperties.candleStyle.wickDownColor": "#ef4444",
-            "scalesProperties.lineColor": "#999999",
-            "scalesProperties.textColor": "#999999",
-            "paneProperties.background": "#ffffff",
-            "paneProperties.vertGridProperties.color": "#f0f0f0",
-            "paneProperties.horzGridProperties.color": "#f0f0f0",
+            "scalesProperties.lineColor": "#94a3b8",
+            "scalesProperties.textColor": "#94a3b8",
+            "paneProperties.background": "#0f172a",
+            "paneProperties.vertGridProperties.color": "#1e293b",
+            "paneProperties.horzGridProperties.color": "#1e293b",
             "symbolWatermarkProperties.transparency": 90,
             "scalesProperties.showStudyLastValue": true
           },
@@ -111,10 +117,11 @@ const TradingViewWidget: React.FC<{ symbol: string }> = ({ symbol }) => {
 };
 
 const StockDetail: React.FC = () => {
-  const { symbol } = useParams<{ symbol: string }>();
+  const { symbol: encodedSymbol } = useParams<{ symbol: string }>();
+  const symbol = encodedSymbol ? decodeURIComponent(encodedSymbol) : '';
   const [stock, setStock] = useState<StockWithSignalCounts | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedTimeFrame, setSelectedTimeFrame] = useState<TimeFrame>('1D');
+  const [selectedTimeFrame, setSelectedTimeFrame] = useState<TimeFrame>('D');
   const { toast } = useToast();
   const navigate = useNavigate();
   const timeFrames = getTimeFrames();
@@ -128,6 +135,9 @@ const StockDetail: React.FC = () => {
         const stockData = await getStockBySymbol(symbol);
         if (stockData) {
           setStock(stockData);
+          if (stockData.signals.length > 0) {
+            setSelectedTimeFrame(stockData.signals[0].timeFrame);
+          }
         } else {
           toast({
             title: 'Stock not found',
@@ -239,15 +249,15 @@ const StockDetail: React.FC = () => {
               <div className="mb-6">
                 <h3 className="text-xl font-semibold mb-4">MACD Signals by Timeframe</h3>
                 <div className="flex flex-wrap gap-2 mb-6">
-                  {timeFrames.map(tf => (
+                  {stock.signals.map(signalGroup => (
                     <Button
-                      key={tf}
-                      variant={selectedTimeFrame === tf ? "default" : "outline"}
+                      key={signalGroup.timeFrame}
+                      variant={selectedTimeFrame === signalGroup.timeFrame ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setSelectedTimeFrame(tf)}
+                      onClick={() => setSelectedTimeFrame(signalGroup.timeFrame)}
                       className="rounded-full"
                     >
-                      {tf}
+                      {signalGroup.timeFrame}
                     </Button>
                   ))}
                 </div>
@@ -271,6 +281,9 @@ const StockDetail: React.FC = () => {
                         <CardContent>
                           <p className="text-sm text-muted-foreground">
                             {signal.value ? 'Signal is active' : 'Signal is not active'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Last updated: {new Date(signal.date).toLocaleString()}
                           </p>
                         </CardContent>
                       </Card>
