@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
-from ...services.supabase_service import supabase_service
-from ...services.macd_service import macd_service
+from app.services.supabase_service import supabase_service
+
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
