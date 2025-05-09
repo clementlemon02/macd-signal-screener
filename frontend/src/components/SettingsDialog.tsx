@@ -42,7 +42,7 @@ const priceChartDayOptions = [7, 14, 30, 60, 90, 180];
 const defaultSignalConfigs: SignalDisplayConfig[] = [
   {
     type: 'MACD_CROSSOVER',
-    label: 'MACD Crossover',
+    label: 'Signal 1',
     description: 'MACD line crosses above signal line',
     enabled: true
   },
