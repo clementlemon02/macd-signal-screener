@@ -21,13 +21,15 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useWatchlist } from '@/context/WatchlistContext';
 
+const VERSION = 'v2'; 
 // Add constants for local storage keys
 const STORAGE_KEYS = {
   SELECTED_TIMEFRAMES: 'macd-screener-timeframes',
   MACD_DAYS: 'macd-screener-macd-days',
   PRICE_CHART_DAYS: 'macd-screener-price-chart-days',
-  SIGNAL_CONFIG: 'macd-screener-signal-config'
+  SIGNAL_CONFIG: 'macd-screener-signal-config-${VERSION}'
 };
+
 
 const DEFAULT_SORT: SortConfig = { field: 'D', direction: 'desc' };
 const DEFAULT_MACD_DAYS = 7;
@@ -99,7 +101,17 @@ const StockTable: React.FC = () => {
   });
   const [signalConfig, setSignalConfig] = useState<SignalDisplayConfig[]>(() => {
     const stored = localStorage.getItem(STORAGE_KEYS.SIGNAL_CONFIG);
-    return stored ? JSON.parse(stored) : DEFAULT_SIGNAL_CONFIG;
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {
+        console.warn("Invalid localStorage data. Resetting...");
+      }
+    }
+  
+    // Set fresh default config if none or invalid
+    localStorage.setItem(STORAGE_KEYS.SIGNAL_CONFIG, JSON.stringify(DEFAULT_SIGNAL_CONFIG));
+    return DEFAULT_SIGNAL_CONFIG;
   });
   const { toast } = useToast();
   const navigate = useNavigate();
