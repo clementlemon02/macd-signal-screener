@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .api.endpoints import stocks, crypto, auth
+from .api.endpoints import stocks, auth
 
 app = FastAPI(
     title="MACD Signal Screener",
@@ -19,7 +19,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(stocks.router, prefix="/api/v1")
-app.include_router(crypto.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 
 @app.get("/")
