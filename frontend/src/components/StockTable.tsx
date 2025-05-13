@@ -17,6 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import ThemeToggle from '@/components/ThemeToggle';
 import WatchlistButton from '@/components/WatchlistButton';
 import { cn } from '@/lib/utils';
+import { signOut } from '@/lib/supabaseAuth';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useWatchlist } from '@/context/WatchlistContext';
@@ -281,6 +282,20 @@ const StockTable: React.FC = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      toast({
+        title: "Error",
+        description: "Failed to sign out. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="w-full space-y-6 px-2 sm:px-4">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -319,6 +334,14 @@ const StockTable: React.FC = () => {
               <span className="hidden sm:inline">Refresh</span>
             </Button>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            className="h-9 flex items-center gap-1"
+          >
+            Logout
+          </Button>
         </div>
       </div>
 
