@@ -1,14 +1,18 @@
 from supabase import create_client, Client
-from ..core.config import settings
 from typing import List, Dict, Any
 import pandas as pd
 from datetime import datetime
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
 
 class SupabaseService:
     def __init__(self):
         self.client: Client = create_client(
-            settings.SUPABASE_URL,
-            settings.SUPABASE_KEY
+            os.getenv("SUPABASE_URL"),
+            os.getenv("SUPABASE_KEY")
         )
     
     async def insert_macd_signal(self, signal_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -87,6 +91,10 @@ class SupabaseService:
         except Exception as e:
             print(f"Error fetching signals: {str(e)}")
             return []
+        
+    async def is_email_allowed(self, email: str) -> bool:
+        response = self.client.table("allowed_users").select("email").eq("email", email).execute()
+        return len(response.data) > 0
 
 # Create a singleton instance
 supabase_service = SupabaseService() 

@@ -12,13 +12,15 @@ export type TimeFrame =
   | '4M' 
   | '5M';
 
-export type SignalType = 
-  | 'MACD_CROSSOVER' 
-  | 'MACD_CROSSUNDER' 
-  | 'SIGNAL_ABOVE_ZERO' 
-  | 'SIGNAL_BELOW_ZERO' 
-  | 'HISTOGRAM_POSITIVE' 
-  | 'HISTOGRAM_NEGATIVE';
+  export type SignalType = 
+  | 'SIGNAL_1'
+  | 'SIGNAL_2'
+  | 'SIGNAL_3'
+  | 'SIGNAL_4'
+  | 'SIGNAL_5'
+  | 'SIGNAL_6'
+  | 'SIGNAL_7';
+
 
 export interface Signal {
   type: SignalType;

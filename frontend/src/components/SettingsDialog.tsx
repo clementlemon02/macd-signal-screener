@@ -39,45 +39,6 @@ const timeframes: TimeFrame[] = ['D', '2D', '3D', '4D', 'W', '2W', '3W', 'M', '2
 const macdDayOptions = [3, 5, 7, 10, 14, 21, 30];
 const priceChartDayOptions = [7, 14, 30, 60, 90, 180];
 
-const defaultSignalConfigs: SignalDisplayConfig[] = [
-  {
-    type: 'MACD_CROSSOVER',
-    label: 'Signal 1',
-    description: 'MACD line crosses above signal line',
-    enabled: true
-  },
-  {
-    type: 'MACD_CROSSUNDER',
-    label: 'MACD Crossunder',
-    description: 'MACD line crosses below signal line',
-    enabled: true
-  },
-  {
-    type: 'SIGNAL_ABOVE_ZERO',
-    label: 'Above Zero',
-    description: 'MACD line is above zero line',
-    enabled: true
-  },
-  {
-    type: 'SIGNAL_BELOW_ZERO',
-    label: 'Below Zero',
-    description: 'MACD line is below zero line',
-    enabled: true
-  },
-  {
-    type: 'HISTOGRAM_POSITIVE',
-    label: 'Positive Histogram',
-    description: 'MACD histogram is positive',
-    enabled: true
-  },
-  {
-    type: 'HISTOGRAM_NEGATIVE',
-    label: 'Negative Histogram',
-    description: 'MACD histogram is negative',
-    enabled: true
-  }
-];
-
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   selectedTimeframes,
   macdDays,

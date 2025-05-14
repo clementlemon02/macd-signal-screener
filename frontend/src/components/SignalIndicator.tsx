@@ -24,6 +24,9 @@ const SignalIndicator: React.FC<SignalIndicatorProps> = ({
     lg: 'w-4 h-4'
   };
 
+  // Extract just the number from the signal type (e.g., "SIGNAL_1" -> "1")
+  const signalNumber = signalType.split('_')[1];
+
   return (
     <TooltipProvider>
       <Tooltip delayDuration={300}>
@@ -39,7 +42,7 @@ const SignalIndicator: React.FC<SignalIndicatorProps> = ({
         </TooltipTrigger>
         <TooltipContent side="top" className="max-w-xs">
           <p className="text-xs">
-            <span className="font-semibold">{signalType.replace(/_/g, ' ')}: </span>
+            <span className="font-semibold">Signal {signalNumber}: </span>
             {getMacdSignalExplanation(signalType)}
           </p>
           <p className="text-xs mt-1 font-semibold">

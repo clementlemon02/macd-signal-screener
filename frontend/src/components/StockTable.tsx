@@ -1,6 +1,6 @@
 import { ArrowDownCircle, ArrowUpCircle, RefreshCw, Search } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
-import { SignalDisplayConfig, SortConfig, SortDirection, SortField, StockWithSignalCounts, TimeFrame } from '@/lib/types';
+import { Signal, SignalDisplayConfig, SortConfig, SortDirection, SortField, StockWithSignalCounts, TimeFrame } from '@/lib/types';
 import { fetchStocks, getSortedStocks, getTimeFrames } from '@/lib/stockService';
 import { formatPercent, formatPrice } from '@/lib/macdService';
 
@@ -17,17 +17,20 @@ import { Switch } from '@/components/ui/switch';
 import ThemeToggle from '@/components/ThemeToggle';
 import WatchlistButton from '@/components/WatchlistButton';
 import { cn } from '@/lib/utils';
+import { signOut } from '@/lib/supabaseAuth';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useWatchlist } from '@/context/WatchlistContext';
 
+const VERSION = 'v2'; 
 // Add constants for local storage keys
 const STORAGE_KEYS = {
   SELECTED_TIMEFRAMES: 'macd-screener-timeframes',
   MACD_DAYS: 'macd-screener-macd-days',
   PRICE_CHART_DAYS: 'macd-screener-price-chart-days',
-  SIGNAL_CONFIG: 'macd-screener-signal-config'
+  SIGNAL_CONFIG: 'macd-screener-signal-config-${VERSION}'
 };
+
 
 const DEFAULT_SORT: SortConfig = { field: 'D', direction: 'desc' };
 const DEFAULT_MACD_DAYS = 7;
@@ -35,42 +38,49 @@ const DEFAULT_PRICE_CHART_DAYS = 30;
 const DEFAULT_TIMEFRAMES: TimeFrame[] = ['D', '2D', '3D', '4D', 'W', '2W', '3W', 'M', '2M', '3M', '4M', '5M'];
 const DEFAULT_SIGNAL_CONFIG: SignalDisplayConfig[] = [
   {
-    type: 'MACD_CROSSOVER',
-    label: 'MACD Crossover',
-    description: 'MACD line crosses above signal line',
-    enabled: true
+    type: 'SIGNAL_1',
+    label: 'Signal 1',
+    description: 'Signal line crosses over MACD line while both are above zero',
+    enabled: true,
   },
   {
-    type: 'MACD_CROSSUNDER',
-    label: 'MACD Crossunder',
-    description: 'MACD line crosses below signal line',
-    enabled: true
+    type: 'SIGNAL_2',
+    label: 'Signal 2',
+    description: 'MACD line drops 60% or more from its last peak point',
+    enabled: true,
   },
   {
-    type: 'SIGNAL_ABOVE_ZERO',
-    label: 'Above Zero',
-    description: 'MACD line is above zero line',
-    enabled: true
+    type: 'SIGNAL_3',
+    label: 'Signal 3',
+    description: 'MACD line forms a 45-degree or steeper downtrend',
+    enabled: true,
   },
   {
-    type: 'SIGNAL_BELOW_ZERO',
-    label: 'Below Zero',
-    description: 'MACD line is below zero line',
-    enabled: true
+    type: 'SIGNAL_4',
+    label: 'Signal 4',
+    description: 'Close price reaches the midpoint between EMA52 and EMA24',
+    enabled: true,
   },
   {
-    type: 'HISTOGRAM_POSITIVE',
-    label: 'Positive Histogram',
-    description: 'MACD histogram is positive',
-    enabled: true
+    type: 'SIGNAL_5',
+    label: 'Signal 5',
+    description: 'Histogram below zero turns white for 2 consecutive bars',
+    enabled: true,
   },
   {
-    type: 'HISTOGRAM_NEGATIVE',
-    label: 'Negative Histogram',
-    description: 'MACD histogram is negative',
-    enabled: true
-  }
+    type: 'SIGNAL_6',
+    label: 'Signal 6',
+    description: 'MACD line turns upward, making a higher point than the previous',
+    enabled: true,
+  },
+  {
+    type: 'SIGNAL_7',
+    label: 'Signal 7',
+    description: 'MACD line crosses above signal line while both are above zero and rising',
+    enabled: true,
+  },
 ];
+
 
 const StockTable: React.FC = () => {
   const [stocks, setStocks] = useState<StockWithSignalCounts[]>([]);
@@ -92,7 +102,17 @@ const StockTable: React.FC = () => {
   });
   const [signalConfig, setSignalConfig] = useState<SignalDisplayConfig[]>(() => {
     const stored = localStorage.getItem(STORAGE_KEYS.SIGNAL_CONFIG);
-    return stored ? JSON.parse(stored) : DEFAULT_SIGNAL_CONFIG;
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {
+        console.warn("Invalid localStorage data. Resetting...");
+      }
+    }
+  
+    // Set fresh default config if none or invalid
+    localStorage.setItem(STORAGE_KEYS.SIGNAL_CONFIG, JSON.stringify(DEFAULT_SIGNAL_CONFIG));
+    return DEFAULT_SIGNAL_CONFIG;
   });
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -100,7 +120,7 @@ const StockTable: React.FC = () => {
   const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
   
   const timeFrames = useMemo(() => getTimeFrames(), []);
-  const displayTimeFrames: TimeFrame[] = ['1D', '1W', '1M', '3M', '6M', '1Y', '2Y', '3Y'];
+  const displayTimeFrames: TimeFrame[] = ['D', 'W', 'M', '3M', '2D', '3D', '4D', '2W'];
 
   // Function to sort timeframes in ascending order
   const getSortedTimeframes = (timeframes: TimeFrame[]): TimeFrame[] => {
@@ -262,6 +282,20 @@ const StockTable: React.FC = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      toast({
+        title: "Error",
+        description: "Failed to sign out. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="w-full space-y-6 px-2 sm:px-4">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -300,6 +334,14 @@ const StockTable: React.FC = () => {
               <span className="hidden sm:inline">Refresh</span>
             </Button>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            className="h-9 flex items-center gap-1"
+          >
+            Logout
+          </Button>
         </div>
       </div>
 
