@@ -75,7 +75,7 @@
     "TAO22974-USD",
     "NEAR-USD",
     "APT21794-USD",
-    "AETHUSD-USD",
+    "AETHUSDT-USD",
     "AAVE-USD",
     "ONDO-USD",
     "OKB-USD",
@@ -87,7 +87,7 @@
       "GC=F"
     ],
     "S&P500": [
-    "MSFT","NVDA","AAPL","AMZN","GOOGL","GOOG","META","TSLA","BRK.B","AVGO",
+    "MSFT","NVDA","AAPL","AMZN","GOOGL","GOOG","META","TSLA","BRK-B","AVGO",
     "WMT","JPM","V","LLY","MA","NFLX","XOM","ORCL","COST","HD",
     "PG","JNJ","BAC","ABBV","PLTR","KO","UNH","CRM","TMUS","PM",
     "WFC","CVX","CSCO","GE","IBM","ABT","MCD","NOW","AXP","LIN",
@@ -128,7 +128,7 @@
     "MAA","WY","CTRA","ZBH","ON","ULTA","ERIE","ESS","HAL","L",
     "LUV","KEY","PFG","DLTR","JBL","CFG","GEN","BIIB","NI","TPR",
     "WDC","FDS","TRMB","GPC","SNA","MOH","NWS","RL","PKG","CLX",
-    "DPZ","BF.B","FFIV","NWSA","PNR","HRL","COO","BBY","EXPD","BAX",
+    "DPZ","BF-B","FFIV","NWSA","PNR","HRL","COO","BBY","EXPD","BAX",
     "LNT","ZBRA","WST","J","APTV","OMC","BALL","JBHT","EG","EVRG",
     "UDR","PAYC","KIM","IEX","MAS","AVY","CF","TXT","TER","ALGN",
     "BLDR","REG","JKHY","CPT","HOLX","UHS","ARE","SOLV","JNPR","ALLE",
