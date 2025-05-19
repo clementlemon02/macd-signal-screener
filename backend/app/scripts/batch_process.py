@@ -2,32 +2,56 @@ import asyncio
 from datetime import datetime
 import json
 from app.services.batch_signal_processor import batch_signal_processor
-with open("symbols.json", "r") as f:
+
+# Load the symbol data from the JSON file
+with open("symbols_yf.json", "r") as f:
     data = json.load(f)
-    symbols = data["crypto"]
+
+# Prepare the symbols list and asset types dictionary
+symbols = []
+asset_types = {}
+
+for category, symbol_list in data.items():
+    for symbol in symbol_list:
+        symbols.append(symbol)
+        asset_types[symbol] = category 
+
+# Define all intervals to fetch
+intervals = [
+    '1d', '2d', '3d', '5d',
+    '1wk', '2wk', '3wk',
+    '1mo', '2mo', '3mo', '4mo', '5mo'
+]
 
 async def process_signals():
-    batch_size = 8  
-    print(f"Processing {len(symbols)} symbols...")
+    print(f"Processing {len(symbols)} symbols across {len(intervals)} intervals...")
 
-    for i in range(0, len(symbols), batch_size):
-        batch = symbols[i:i+batch_size]
-        print(f"Processing batch: {batch}")
+    try:
+        for interval in intervals:
+            print(f"\nFetching signals for interval: {interval}")
+            
+            signals = await batch_signal_processor.process_symbols(
+                symbols,
+                period='6mo',  
+                interval=interval,
+                asset_types=asset_types
+            )
 
-        try:
-            signals = await batch_signal_processor.process_symbols(batch, '1day')
+            # Organize the signals by symbol
             signals_by_symbol = {}
             for signal in signals:
                 symbol = signal['symbol']
                 if symbol not in signals_by_symbol:
                     signals_by_symbol[symbol] = []
                 signals_by_symbol[symbol].append(signal)
-            
-            for symbol in batch:
+
+            # Print the number of signals generated for each symbol for this interval
+            for symbol in symbols:
                 signal_count = len(signals_by_symbol.get(symbol, []))
-                print(f"Generated {signal_count} signals for {symbol}")
-        except Exception as e:
-            print(f"Error processing batch {batch}: {str(e)}")
+                print(f"[{interval}] {symbol}: {signal_count} signals")
+
+    except Exception as e:
+        print(f"Error processing symbols: {str(e)}")
 
 async def main():
     print(f"Starting signal processing at {datetime.now()}")

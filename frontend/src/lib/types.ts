@@ -1,16 +1,16 @@
 export type TimeFrame = 
-  | 'D' 
-  | '2D' 
-  | '3D' 
-  | '4D' 
-  | 'W' 
-  | '2W' 
-  | '3W' 
-  | 'M' 
-  | '2M' 
-  | '3M' 
-  | '4M' 
-  | '5M';
+  | '1d' 
+  | '2d' 
+  | '3d' 
+  | '5d' 
+  | '1wk' 
+  | '2wk' 
+  | '3wk' 
+  | '1mo' 
+  | '2mo' 
+  | '3mo' 
+  | '4mo' 
+  | '5mo';
 
   export type SignalType = 
   | 'SIGNAL_1'
@@ -62,11 +62,6 @@ export interface TimeframeSignalCounts {
   totalPossible: number;
 }
 
-export interface StockWithSignalCounts extends Stock {
-  signalCounts: TimeframeSignalCounts[];
-  totalPositiveSignals: number;
-}
-
 export type SortDirection = 'asc' | 'desc';
 
 export type SortField = 'symbol' | 'name' | 'price' | 'change' | TimeFrame;
@@ -81,4 +76,52 @@ export interface SignalDisplayConfig {
   label: string;
   description: string;
   enabled: boolean;
+}
+
+export interface MacdSignal {
+  symbol: string;
+  asset_type: string;
+  timeframe: string;
+  date: string;
+  macd_line: number;
+  signal_line: number;
+  macd_histogram: number;
+  signal_1: boolean;
+  signal_2: boolean;
+  signal_3: boolean;
+  signal_4: boolean;
+  signal_5: boolean;
+  signal_6: boolean;
+  signal_7: boolean;
+  close_price: number;
+}
+
+export interface MacdHistoryItem {
+  date: string;
+  macdLine: number;
+  signalLine: number;
+  histogram: number;
+}
+
+export interface SignalFlags {
+  date: string;
+  signal_1: boolean;
+  signal_2: boolean;
+  signal_3: boolean;
+  signal_4: boolean;
+  signal_5: boolean;
+  signal_6: boolean;
+  signal_7: boolean;
+}
+
+export interface StockWithMacdHistory {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  signals: { [timeframe: string]: SignalFlags[] };
+  macdHistory: MacdHistoryItem[];
+  priceHistory: { date: string; price: number }[];
+  signalCounts?: Record<string, number>; // signalCounts is now Record<string, number>
+  totalPositiveSignals?: Record<string, number>; 
 }

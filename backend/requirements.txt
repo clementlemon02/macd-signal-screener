@@ -10,3 +10,7 @@ passlib==1.7.4
 python-multipart==0.0.6
 pydantic-settings==2.1.0
 supabase==2.9.0
+twelvedata
+tqdm
+schedule==1.2.1
+pytz==2024.1

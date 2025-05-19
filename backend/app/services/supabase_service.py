@@ -24,32 +24,33 @@ class SupabaseService:
             print(f"Error inserting MACD signal: {str(e)}")
             return None
 
-    async def insert_macd_signals_batch(self, signals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Insert multiple MACD signals into the database"""
-        try:
-            response = self.client.table('macd_signals').insert(signals).execute()
-            return response.data
-        except Exception as e:
-            print(f"Error inserting MACD signals batch: {str(e)}")
-            return []
+    async def insert_macd_signals_batch(self, signals: List[Dict[str, Any]], batch_size: int = 500):
+        for i in range(0, len(signals), batch_size):
+            batch = signals[i:i+batch_size]
+            try:
+                response = self.client.table("macd_signals") \
+                    .upsert(batch, on_conflict='symbol,timeframe,date') \
+                    .execute()
+                print(f"✅ Inserted batch {i//batch_size + 1}, size: {len(batch)}")
+            except Exception as e:
+                print(f"❌ Error inserting batch {i//batch_size + 1}: {str(e)}")
 
-    async def get_latest_signal_date(self, symbol: str, timeframe: str) -> datetime:
-        """Get the date of the latest signal for a symbol and timeframe"""
+
+    async def get_latest_signal_date(self) -> str:
+        """Get the latest signal date from the database"""
         try:
-            response = self.client.table('macd_signals')\
-                .select('date')\
-                .eq('symbol', symbol)\
-                .eq('timeframe', timeframe)\
-                .order('date', desc=True)\
-                .limit(1)\
+            response = self.client.table('macd_signals') \
+                .select('created_at') \
+                .order('created_at', desc=True) \
+                .limit(1) \
                 .execute()
             
-            if response.data:
-                return datetime.fromisoformat(response.data[0]['date'])
-            return datetime.min
+            if response.data and len(response.data) > 0:
+                return response.data[0]['created_at']
+            return None
         except Exception as e:
             print(f"Error getting latest signal date: {str(e)}")
-            return datetime.min
+            return None
 
     async def get_stocks(self) -> List[Dict[str, Any]]:
         """Fetch stocks data from Supabase"""
@@ -95,6 +96,55 @@ class SupabaseService:
     async def is_email_allowed(self, email: str) -> bool:
         response = self.client.table("allowed_users").select("email").eq("email", email).execute()
         return len(response.data) > 0
+    
+    async def get_last_cycle_state(self, symbol: str, asset_type: str, timeframe: str) -> Dict[str, int]:
+        """Retrieve the last cycle ID and step for a symbol/timeframe"""
+        try:
+            response = self.client.table("macd_cycle_state")\
+                .select("last_cycle_id, last_cycle_step")\
+                .eq("symbol", symbol)\
+                .eq("asset_type", asset_type)\
+                .eq("timeframe", timeframe)\
+                .limit(1)\
+                .execute()
+            
+            if response.data:
+                return {
+                    "last_cycle_id": response.data[0]["last_cycle_id"],
+                    "last_cycle_step": response.data[0]["last_cycle_step"]
+                }
+            else:
+                return {
+                    "last_cycle_id": 0,
+                    "last_cycle_step": 0
+                }
+        except Exception as e:
+            print(f"Error getting last cycle state: {str(e)}")
+            return {
+                "last_cycle_id": 0,
+                "last_cycle_step": 0
+            }
+            
+    async def update_cycle_state(self, symbol: str, asset_type: str, timeframe: str, new_cycle_id: int, new_step: int) -> bool:
+        """Update or insert the cycle state for a symbol/timeframe"""
+        try:
+            response = self.client.table("macd_cycle_state")\
+                .upsert({
+                    "symbol": symbol,
+                    "asset_type": asset_type,
+                    "timeframe": timeframe,
+                    "last_cycle_id": new_cycle_id,
+                    "last_cycle_step": new_step,
+                    "updated_at": datetime.utcnow().isoformat()
+                })\
+                .execute()
+            
+            return response.status_code in [200, 201]
+        except Exception as e:
+            print(f"Error updating cycle state: {str(e)}")
+            return False
+
+
 
 # Create a singleton instance
 supabase_service = SupabaseService() 
