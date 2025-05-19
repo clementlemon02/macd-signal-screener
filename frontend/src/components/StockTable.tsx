@@ -33,7 +33,7 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useWatchlist } from '@/context/WatchlistContext';
 
-const VERSION = 'v2'; 
+const CURRENT_VERSION = '1.0.0'; 
 // Add constants for local storage keys
 const STORAGE_KEYS = {
   SELECTED_TIMEFRAMES: 'macd-screener-timeframes',
@@ -270,7 +270,12 @@ const StockTable: React.FC = () => {
 
   // Save settings to local storage when they change
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SELECTED_TIMEFRAMES, JSON.stringify(selectedTimeframes));
+    const storedVersion = localStorage.getItem("VERSION");
+  
+    if (storedVersion !== CURRENT_VERSION) {
+      localStorage.setItem("VERSION", CURRENT_VERSION);
+      localStorage.setItem(STORAGE_KEYS.SELECTED_TIMEFRAMES, JSON.stringify(selectedTimeframes));
+    }
   }, [selectedTimeframes]);
 
   useEffect(() => {
