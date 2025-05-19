@@ -1,7 +1,16 @@
 import { ArrowDownCircle, ArrowUpCircle, RefreshCw, Search } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
-import { Signal, SignalDisplayConfig, SortConfig, SortDirection, SortField, StockWithSignalCounts, TimeFrame } from '@/lib/types';
-import { fetchStocks, getSortedStocks, getTimeFrames } from '@/lib/stockService';
+import {
+  ColumnDef,
+  SortingState,
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from '@tanstack/react-table';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Signal, SignalDisplayConfig, SignalFlags, SortConfig, SortDirection, SortField, StockWithMacdHistory, TimeFrame } from '@/lib/types';
+import { fetchStocksPageFromSupabase, getLatestCreatedAt } from '@/lib/supabaseService';
 import { formatPercent, formatPrice } from '@/lib/macdService';
 
 import { Button } from '@/components/ui/button';
@@ -17,12 +26,14 @@ import { Switch } from '@/components/ui/switch';
 import ThemeToggle from '@/components/ThemeToggle';
 import WatchlistButton from '@/components/WatchlistButton';
 import { cn } from '@/lib/utils';
+import { debounce } from 'lodash';
+import mappingDirectory from '../lib/mapping_directory.json';
 import { signOut } from '@/lib/supabaseAuth';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useWatchlist } from '@/context/WatchlistContext';
 
-const VERSION = 'v2'; 
+const CURRENT_VERSION = '1.0.0'; 
 // Add constants for local storage keys
 const STORAGE_KEYS = {
   SELECTED_TIMEFRAMES: 'macd-screener-timeframes',
@@ -32,10 +43,9 @@ const STORAGE_KEYS = {
 };
 
 
-const DEFAULT_SORT: SortConfig = { field: 'D', direction: 'desc' };
+const DEFAULT_SORT: SortConfig = { field: '1d', direction: 'desc' };
 const DEFAULT_MACD_DAYS = 7;
 const DEFAULT_PRICE_CHART_DAYS = 30;
-const DEFAULT_TIMEFRAMES: TimeFrame[] = ['D', '2D', '3D', '4D', 'W', '2W', '3W', 'M', '2M', '3M', '4M', '5M'];
 const DEFAULT_SIGNAL_CONFIG: SignalDisplayConfig[] = [
   {
     type: 'SIGNAL_1',
@@ -83,14 +93,21 @@ const DEFAULT_SIGNAL_CONFIG: SignalDisplayConfig[] = [
 
 
 const StockTable: React.FC = () => {
-  const [stocks, setStocks] = useState<StockWithSignalCounts[]>([]);
-  const [filteredStocks, setFilteredStocks] = useState<StockWithSignalCounts[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Pagination state
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalRows, setTotalRows] = useState(0);
+  const [uniqueSymbolCount, setUniqueSymbolCount] = useState(0);
+  const [selectedAssetType, setSelectedAssetType] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
+  const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
+  const [stocks, setStocks] = useState<StockWithMacdHistory[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedTimeframes, setSelectedTimeframes] = useState<TimeFrame[]>(() => {
     const stored = localStorage.getItem(STORAGE_KEYS.SELECTED_TIMEFRAMES);
-    return stored ? JSON.parse(stored) : ['D', 'W', 'M', '3M', '2D', '3D', '4D', '2W'];
+    return stored ? JSON.parse(stored) : ['1d', '1wk', '1mo', '3mo', '2d', '3d', '5d', '2wk'];
   });
   const [macdDays, setMacdDays] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEYS.MACD_DAYS);
@@ -117,17 +134,34 @@ const StockTable: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { watchlist } = useWatchlist();
-  const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
-  
-  const timeFrames = useMemo(() => getTimeFrames(), []);
-  const displayTimeFrames: TimeFrame[] = ['D', 'W', 'M', '3M', '2D', '3D', '4D', '2W'];
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+
+  // Function to normalize timeframe for database
+  const normalizeTimeFrame = (tf: string): string => {
+    const map: Record<string, string> = {
+      '1d': '1d',
+      '2d': '2d',
+      '3d': '3d',
+      '5d': '5d',
+      '1wk': '1wk',
+      '2wk': '2wk',
+      '3wk': '3wk',
+      '1mo': '1mo',
+      '2mo': '2mo',
+      '3mo': '3mo',
+      '4mo': '4mo',
+      '5mo': '5mo'
+    };
+    return map[tf] || tf;
+  };
 
   // Function to sort timeframes in ascending order
   const getSortedTimeframes = (timeframes: TimeFrame[]): TimeFrame[] => {
     const timeframeOrder: { [key: string]: number } = {
-      'D': 1, '2D': 2, '3D': 3, '4D': 4,
-      'W': 5, '2W': 6, '3W': 7,
-      'M': 8, '2M': 9, '3M': 10, '4M': 11, '5M': 12
+      '1d': 1, '2d': 2, '3d': 3, '5d': 4,
+      '1wk': 5, '2wk': 6, '3wk': 7,
+      '1mo': 8, '2mo': 9, '3mo': 10, '4mo': 11, '5mo': 12
     };
     
     return [...timeframes].sort((a, b) => timeframeOrder[a] - timeframeOrder[b]);
@@ -139,14 +173,37 @@ const StockTable: React.FC = () => {
     [selectedTimeframes]
   );
 
-  const loadStocks = async () => {
+  // Fetch paginated stocks
+  const loadStocks = useCallback(async (page = pageIndex, size = pageSize) => {
     setLoading(true);
     try {
-      const data = await fetchStocks();
-      setStocks(data);
-      setFilteredStocks(getSortedStocks(data, sortConfig));
+      // If showing watchlist, fetch all stocks
+      const { data, total, uniqueSymbolCount } = await fetchStocksPageFromSupabase(
+        showWatchlistOnly ? 0 : page,
+        showWatchlistOnly ? 1000 : size,
+        selectedAssetType,
+        searchQuery,
+        sorting.length > 0 ? {
+          field: sorting[0].id,
+          direction: sorting[0].desc ? 'desc' : 'asc'
+        } : undefined
+      );
+
+      if (showWatchlistOnly) {
+        // Filter the fetched data to only include watchlist items
+        const watchlistData = data.filter(stock => watchlist.includes(stock.symbol));
+        setStocks(watchlistData);
+        setTotalRows(watchlistData.length);
+        setUniqueSymbolCount(watchlistData.length);
+      } else {
+        setStocks(data);
+        // Use the total count from the backend
+        setTotalRows(total || 0);
+        setUniqueSymbolCount(uniqueSymbolCount);
+      }
     } catch (error) {
       console.error('Error fetching stocks:', error);
+      console.log(error)
       toast({
         title: 'Error loading stocks',
         description: 'There was a problem loading stock data. Please try again.',
@@ -155,35 +212,42 @@ const StockTable: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [pageIndex, pageSize, selectedAssetType, searchQuery, sorting, showWatchlistOnly, watchlist, toast]);
 
+  // Memoize filtered stocks to prevent unnecessary re-renders
+  const filteredStocks = useMemo(() => {
+    if (!showWatchlistOnly) return stocks;
+    return stocks.filter(stock => watchlist.includes(stock.symbol));
+  }, [stocks, showWatchlistOnly, watchlist]);
+
+  // Update when watchlist filter changes
   useEffect(() => {
     loadStocks();
-  }, []);
+  }, [loadStocks]);
 
+  // Update when other filters change
   useEffect(() => {
-    let filtered = stocks;
-    
-    if (searchQuery) {
-      filtered = filtered.filter(stock => 
-        stock.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        stock.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-    
-    if (showWatchlistOnly) {
-      filtered = filtered.filter(stock => watchlist.includes(stock.symbol));
-    }
-    
-    setFilteredStocks(getSortedStocks(filtered, sortConfig));
-  }, [stocks, searchQuery, sortConfig, watchlist, showWatchlistOnly]);
+    loadStocks();
+  }, [loadStocks]);
 
-  const handleSort = (field: SortField) => {
-    setSortConfig(prevConfig => ({
-      field,
-      direction: prevConfig.field === field && prevConfig.direction === 'desc' ? 'asc' : 'desc',
-    }));
+  // Add debounced search
+  const debouncedSearch = useMemo(
+    () => debounce((value: string) => {
+      setSearchQuery(value);
+      setPageIndex(0); // Reset to first page when searching
+    }, 300),
+    []
+  );
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    debouncedSearch(e.target.value);
   };
+
+  // Calculate total pages
+  const totalPages = useMemo(() => {
+    if (showWatchlistOnly) return 1;
+    return Math.max(1, Math.ceil(uniqueSymbolCount  / pageSize));
+  }, [uniqueSymbolCount , pageSize, showWatchlistOnly]);
 
   const handleRefresh = () => {
     loadStocks();
@@ -200,11 +264,18 @@ const StockTable: React.FC = () => {
 
   const toggleWatchlistFilter = () => {
     setShowWatchlistOnly(!showWatchlistOnly);
+    // Reset to first page when toggling watchlist
+    setPageIndex(0);
   };
 
   // Save settings to local storage when they change
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SELECTED_TIMEFRAMES, JSON.stringify(selectedTimeframes));
+    const storedVersion = localStorage.getItem("VERSION");
+  
+    if (storedVersion !== CURRENT_VERSION) {
+      localStorage.setItem("VERSION", CURRENT_VERSION);
+      localStorage.setItem(STORAGE_KEYS.SELECTED_TIMEFRAMES, JSON.stringify(selectedTimeframes));
+    }
   }, [selectedTimeframes]);
 
   useEffect(() => {
@@ -234,11 +305,36 @@ const StockTable: React.FC = () => {
   };
 
   // Filter signals based on enabled configuration
-  const getFilteredSignals = (signals: Signal[]) => {
-    return signals.filter(signal => 
-      signalConfig.find(config => config.type === signal.type)?.enabled
-    );
+  const getFilteredSignals = (timeframeSignals: SignalFlags[] | null, timeFrame: TimeFrame) => {
+    if (!timeframeSignals || timeframeSignals.length === 0) {
+      return signalConfig
+        .filter(config => config.enabled)
+        .map(config => ({
+          type: config.type,
+          value: false,
+          timeFrame,
+          date: new Date().toISOString()
+        }));
+    }
+  
+    const latestSignal = timeframeSignals[0]; // Most recent signal
+    
+  
+    return signalConfig
+    .filter(config => config.enabled)
+    .map(config => {
+      const key = `signal_${config.type.split('_')[1]}`;
+      const value = latestSignal[key as keyof typeof latestSignal];
+      
+      return {
+        type: config.type,
+        value: value as boolean,
+        timeFrame,
+        date: latestSignal.date
+      };
+    });
   };
+  
 
   // Update handleMacdDaysChange to ensure signals are generated for all timeframes
   const handleMacdDaysChange = (days: number) => {
@@ -296,11 +392,265 @@ const StockTable: React.FC = () => {
     }
   };
 
+  const handleSort = (field: SortField) => {
+    // For timeframe sorting, we need to sort by the count of signals
+    const sortField = field === '1wk' || field === '2wk' || field === '3wk' || 
+                     field === '1mo' || field === '2mo' || field === '3mo' || 
+                     field === '4mo' || field === '5mo' || field === '1d' || 
+                     field === '2d' || field === '3d' || field === '5d' ? field : field;
+    
+    setSorting(prev => {
+      const currentSort = prev.find(sort => sort.id === sortField);
+      if (currentSort) {
+        // If already sorting by this field, toggle direction
+        return prev.map(sort => 
+          sort.id === sortField 
+            ? { ...sort, desc: !sort.desc }
+            : sort
+        );
+      } else {
+        // If not sorting by this field, add new sort
+        return [{ id: sortField, desc: false }];
+      }
+    });
+  };
+
+  // Function to calculate total positive signals for a timeframe
+  const getTotalPositiveSignals = (timeframeSignals: SignalFlags[] | null, timeFrame: TimeFrame) => {
+    if (!timeframeSignals || timeframeSignals.length === 0) return 0;
+    const latestSignal = timeframeSignals[0];
+    return Object.entries(latestSignal)
+      .filter(([key]) => key.startsWith('signal_'))
+      .reduce((sum, [_, value]) => sum + (value ? 1 : 0), 0);
+  };
+
+  // Add function to fetch last update time
+  const fetchLastUpdate = async () => {
+    try {
+      const response = await getLatestCreatedAt();
+      if (response) {
+        const formattedDate = response.toISOString().split("T")[0]; // "YYYY-MM-DD"
+        setLastUpdated(formattedDate);
+      }
+    } catch (error) {
+      console.error("Error fetching last update time:", error);
+    }
+  };
+  
+
+  // Fetch last update time when component mounts
+  useEffect(() => {
+    fetchLastUpdate();
+  }, []);
+
+  // Define columns
+  const columns = useMemo<ColumnDef<StockWithMacdHistory>[]>(() => [
+    {
+      id: 'watchlist',
+      header: () => null,
+      cell: ({ row }) => <WatchlistButton symbol={row.original.symbol} />,
+      size: 40,
+    },
+    {
+      id: 'symbol',
+      header: () => <StockHeaderCell 
+        label="Symbol & Name" 
+        field="symbol" 
+        currentSort={sorting.find(s => s.id === 'symbol')} 
+        onSort={() => handleSort('symbol')} 
+      />,
+      cell: ({ row }) => {
+        // Find the company name from the mapping directory
+        let companyName = row.original.symbol;
+        for (const category in mappingDirectory) {
+          if (mappingDirectory[category][row.original.symbol]) {
+            companyName = mappingDirectory[category][row.original.symbol];
+            break;
+          }
+        }
+        
+        return (
+          <div className="flex flex-col">
+            <span className="font-medium">{row.original.symbol}</span>
+            <span className="text-sm text-muted-foreground">{companyName}</span>
+          </div>
+        );
+      },
+      size: 200,
+    },
+    {
+      id: 'price',
+      header: () => <StockHeaderCell 
+        label="Price & Change" 
+        field="price" 
+        currentSort={sorting.find(s => s.id === 'price')} 
+        onSort={() => handleSort('price')} 
+      />,
+      cell: ({ row }) => {
+        return(
+        <div className="flex flex-col">
+          <span className="font-medium">{formatPrice(row.original.price)}</span>
+          <span className={`text-sm ${row.original.change >= 0 ? 'text-signal-positive' : 'text-signal-negative'}`}>
+            {formatPercent(row.original.change)}
+          </span>
+          <div className="h-8 mt-1">
+            {row.original.priceHistory && row.original.priceHistory.length > 0 ? (
+              <MiniPriceChart 
+                data={row.original.priceHistory} 
+                days={priceChartDays}
+              />
+            ) : (
+              <div className="text-xs text-muted-foreground text-center">No data</div>
+            )}
+          </div>
+        </div>
+      )},
+      size: 200,
+    },
+    ...sortedSelectedTimeframes.map(timeFrame => ({
+      
+      id: timeFrame,
+      header: () => <StockHeaderCell 
+        label={timeFrame} 
+        field={timeFrame} 
+        currentSort={sorting.find(s => s.id === `signal_count_${timeFrame}`)} 
+        onSort={() => handleSort(timeFrame)} 
+      />,
+      cell: ({ row }) => {
+        const normalizedTimeFrame = normalizeTimeFrame(timeFrame);
+        const timeframeSignals = row.original.signals?.[normalizedTimeFrame];
+      
+        if (!timeframeSignals) {
+          console.warn("No timeframe signals found.");
+          return null;
+        }
+      
+        const filteredSignals = getFilteredSignals(timeframeSignals, timeFrame);
+        const signalCount = {
+          timeFrame,
+          positiveCount: filteredSignals.filter(s => s.value).length,
+          totalPossible: filteredSignals.length
+        };
+        
+        return (
+          <div>
+            <div className="flex flex-wrap justify-center gap-1.5 py-1">
+              {filteredSignals.map((signal) => (
+                <SignalIndicator
+                  key={`${row.original.symbol}-${timeFrame}-${signal.type}`}
+                  value={signal.value}
+                  signalType={signal.type}
+                  size="sm"
+                />
+              ))}
+            </div>
+            <div className="text-xs text-center mt-1 font-medium">
+              <span className={`${signalCount.positiveCount > signalCount.totalPossible / 2 ? 'text-signal-positive' : 'text-muted-foreground'}`}>
+                {signalCount.positiveCount}/{signalCount.totalPossible}
+              </span>
+            </div>
+          </div>
+        );
+      },
+      sortingFn: (rowA, rowB, columnId) => {
+        const timeFrame = columnId as TimeFrame;
+        const normalizedTimeFrame = normalizeTimeFrame(timeFrame);
+        
+        const signalsA = rowA.original.signals?.[normalizedTimeFrame] || [];
+        const signalsB = rowB.original.signals?.[normalizedTimeFrame] || [];
+        
+        const countA = getTotalPositiveSignals(signalsA, timeFrame);
+        const countB = getTotalPositiveSignals(signalsB, timeFrame);
+        
+        return countA - countB;
+      },
+      size: 140,
+    })),
+    {
+      id: 'convergence',
+      header: 'Conv/Div',
+      cell: ({ row }) => {
+        let isConverging = false;
+        if (row.original.macdHistory && row.original.macdHistory.length >= 2) {
+          const latestMacd = row.original.macdHistory[row.original.macdHistory.length - 1];
+          const prevMacd = row.original.macdHistory[row.original.macdHistory.length - 2];
+          const currentDistance = Math.abs(latestMacd.macdLine - latestMacd.signalLine);
+          const prevDistance = Math.abs(prevMacd.macdLine - prevMacd.signalLine);
+          isConverging = currentDistance < prevDistance;
+        }
+        
+        return (
+          <div className="flex items-center justify-center gap-2">
+            {isConverging ? (
+              <ArrowUpCircle className="w-5 h-5 text-signal-positive animate-pulse" />
+            ) : (
+              <ArrowDownCircle className="w-5 h-5 text-signal-negative animate-pulse" />
+            )}
+            <div className="flex flex-col items-center">
+              <div className={`text-sm font-medium ${isConverging ? 'text-signal-positive' : 'text-signal-negative'}`}>
+                {isConverging ? 'Converging' : 'Diverging'}
+              </div>
+            </div>
+          </div>
+        );
+      },
+      size: 100,
+    },
+    {
+      id: 'macd',
+      header: `MACD (${macdDays}d)`,
+      cell: ({ row }) => {
+        return (
+        row.original.macdHistory && row.original.macdHistory.length > 0 ? (
+          <MacdMiniChart 
+            data={row.original.macdHistory.slice(-macdDays)} 
+          />
+        ) : (
+          <div className="text-xs text-muted-foreground text-center">No data</div>
+        )
+      )},
+      size: 160,
+    },
+  ], [sortedSelectedTimeframes, sorting, priceChartDays, macdDays]);
+
+  // Initialize table
+  const table = useReactTable({
+    data: filteredStocks,
+    columns,
+    pageCount: totalPages,
+    state: {
+      sorting,
+      pagination: {
+        pageIndex: showWatchlistOnly ? 0 : pageIndex,
+        pageSize: showWatchlistOnly ? filteredStocks.length : pageSize,
+      },
+    },
+    onSortingChange: setSorting,
+    onPaginationChange: (updater) => {
+      if (typeof updater === 'function') {
+        const newState = updater({ pageIndex, pageSize });
+        if (!showWatchlistOnly) {
+          setPageIndex(newState.pageIndex);
+          setPageSize(newState.pageSize);
+        }
+      }
+    },
+    manualPagination: true,
+    manualSorting: sorting.length > 0 && !sorting[0].id.startsWith('signal_count_'),
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
   return (
     <div className="w-full space-y-6 px-2 sm:px-4">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <h1 className="text-2xl font-bold sm:text-3xl">MACD Signal Screener</h1>
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            {lastUpdated && (
+              <span>Last updated: {(lastUpdated)}</span>
+            )}
+          </div>
           <ThemeToggle />
           <div className="flex gap-2">
             <div className="relative flex-1 min-w-[200px]">
@@ -308,11 +658,24 @@ const StockTable: React.FC = () => {
               <Input
                 type="text"
                 placeholder="Search stocks..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={handleSearchChange}
                 className="pl-9 h-9"
               />
             </div>
+            <select
+              value={selectedAssetType}
+              onChange={(e) => {
+                setSelectedAssetType(e.target.value);
+                setPageIndex(0); // Reset to first page when changing asset type
+              }}
+              className="h-9 px-3 py-1 bg-background border border-input rounded-md"
+            >
+              <option value="">All Assets</option>
+              <option value="S&P500">S&P 500</option>
+              <option value="Top 50 Crypto">Top 50 Crypto</option>
+              <option value="Bursa Top 30 Blue Chips">Bursa Top 30 Blue Chips</option>
+              <option value="GOLD">Gold</option>
+            </select>
             <SettingsDialog
               selectedTimeframes={selectedTimeframes}
               macdDays={macdDays}
@@ -369,167 +732,104 @@ const StockTable: React.FC = () => {
             <p className="mt-4 text-sm text-muted-foreground">Loading stock data...</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full divide-y divide-border">
-              <thead className="bg-muted/30">
-                <tr>
-                  <th className="px-2 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-8">
-                    {/* Empty header for watchlist column */}
-                  </th>
-                  <StockHeaderCell 
-                    label="Symbol & Name" 
-                    field="symbol" 
-                    currentSort={sortConfig} 
-                    onSort={handleSort} 
-                    className="w-52"
-                  />
-                  <StockHeaderCell 
-                    label="Price & Change" 
-                    field="price" 
-                    currentSort={sortConfig} 
-                    onSort={handleSort}
-                    className="w-52"
-                  />
-                  {sortedSelectedTimeframes.map(timeFrame => (
-                    <StockHeaderCell 
-                      key={timeFrame}
-                      label={timeFrame} 
-                      field={timeFrame as SortField} 
-                      currentSort={sortConfig} 
-                      onSort={handleSort}
-                      className="w-28 text-center"
-                    />
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full divide-y divide-border">
+                <thead className="bg-muted/30">
+                  {table.getHeaderGroups().map(headerGroup => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map(header => (
+                        <th
+                          key={header.id}
+                          className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                          style={{ width: header.getSize() }}
+                        >
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                        </th>
+                      ))}
+                    </tr>
                   ))}
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-28">
-                    Conv/Div
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-40">
-                    MACD ({macdDays}d)
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-background divide-y divide-border">
-                {filteredStocks.length === 0 ? (
-                  <tr>
-                    <td colSpan={5 + sortedSelectedTimeframes.length} className="px-4 py-8 text-center text-muted-foreground">
-                      {searchQuery || showWatchlistOnly 
-                        ? 'No matching stocks found' 
-                        : 'No stocks available'}
-                    </td>
-                  </tr>
-                ) : (
-                  filteredStocks.map((stock) => {
-                    // Calculate convergence/divergence
-                    const latestMacd = stock.macdHistory[stock.macdHistory.length - 1];
-                    const prevMacd = stock.macdHistory[stock.macdHistory.length - 2];
-                    const currentDistance = Math.abs(latestMacd.macdLine - latestMacd.signalLine);
-                    const prevDistance = Math.abs(prevMacd.macdLine - prevMacd.signalLine);
-                    const isConverging = currentDistance < prevDistance;
-                    
-                    
-                    return (
-                    <tr 
-                      key={stock.symbol}
-                      className="stock-row hover:bg-muted/20 transition-colors cursor-pointer"
-                      onClick={() => handleRowClick(stock.symbol)}
-                    >
-                      <td className="px-2 py-3 text-center">
-                        <WatchlistButton symbol={stock.symbol} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col">
-                          <span className="font-medium">{stock.symbol}</span>
-                          <span className="text-sm text-muted-foreground">{stock.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col">
-                          <span className="font-medium">{formatPrice(stock.price)}</span>
-                          <span className={`text-sm ${stock.change >= 0 ? 'text-signal-positive' : 'text-signal-negative'}`}>
-                            {formatPercent(stock.change)}
-                          </span>
-                          <div className="h-8 mt-1">
-                            {stock.priceHistory && stock.priceHistory.length > 0 ? (
-                              <MiniPriceChart 
-                                data={stock.priceHistory} 
-                                days={priceChartDays}
-                              />
-                            ) : (
-                              <div className="text-xs text-muted-foreground text-center">No data</div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      {sortedSelectedTimeframes.map(timeFrame => {
-                        let timeframeSignals = stock.signals.find(
-                          s => s.timeFrame === timeFrame
-                        )?.signals;
-
-                        if (!timeframeSignals) {
-                          timeframeSignals = signalConfig
-                            .filter(config => config.enabled)
-                            .map(config => ({
-                              type: config.type,
-                              value: false,
-                              timeFrame,
-                              date: new Date().toISOString()
-                            }));
-                        } else {
-                          timeframeSignals = getFilteredSignals(timeframeSignals);
-                        }
-                        
-                        const signalCount = {
-                          timeFrame,
-                          positiveCount: timeframeSignals.filter(s => s.value).length,
-                          totalPossible: timeframeSignals.length
-                        };
-                        
-                        return (
-                          <td key={`${stock.symbol}-${timeFrame}`} className="px-4 py-3">
-                            <div className="flex flex-wrap justify-center gap-1.5 py-1">
-                              {timeframeSignals.map((signal, i) => (
-                                <SignalIndicator
-                                  key={`${stock.symbol}-${timeFrame}-${signal.type}`}
-                                  value={signal.value}
-                                  signalType={signal.type}
-                                  size="sm"
-                                />
-                              ))}
-                            </div>
-                            <div className="text-xs text-center mt-1 font-medium">
-                              <span className={`${signalCount.positiveCount > signalCount.totalPossible / 2 ? 'text-signal-positive' : 'text-muted-foreground'}`}>
-                                {signalCount.positiveCount}/{signalCount.totalPossible}
-                              </span>
-                            </div>
-                          </td>
-                        );
-                      })}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-2">
-                          {isConverging ? (
-                            <ArrowUpCircle className="w-5 h-5 text-signal-positive animate-pulse" />
-                          ) : (
-                            <ArrowDownCircle className="w-5 h-5 text-signal-negative animate-pulse" />
-                          )}
-                          <div className="flex flex-col items-center">
-                            <div className={`text-sm font-medium ${isConverging ? 'text-signal-positive' : 'text-signal-negative'}`}>
-                              {isConverging ? 'Converging' : 'Diverging'}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {stock.macdHistory && stock.macdHistory.length > 0 ? (
-                          <MacdMiniChart data={stock.macdHistory.slice(-macdDays)} />
-                        ) : (
-                          <div className="text-xs text-muted-foreground text-center">No data</div>
-                        )}
+                </thead>
+                <tbody className="bg-background divide-y divide-border">
+                  {table.getRowModel().rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={columns.length} className="px-4 py-8 text-center text-muted-foreground">
+                        {searchQuery || showWatchlistOnly 
+                          ? 'No matching stocks found' 
+                          : 'No stocks available'}
                       </td>
                     </tr>
-                  )}))}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    table.getRowModel().rows.map(row => (
+                      <tr
+                        key={row.id}
+                        className="stock-row hover:bg-muted/20 transition-colors cursor-pointer"
+                        onClick={() => handleRowClick(row.original.symbol)}
+                      >
+                        {row.getVisibleCells().map(cell => (
+                          <td
+                            key={cell.id}
+                            className="px-4 py-3"
+                          >
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-between items-center py-4">
+              <div>
+                Page {pageIndex + 1} of {totalPages}
+              </div>
+              <div className="flex gap-2 items-center">
+                <Button 
+                  onClick={() => setPageIndex(0)} 
+                  disabled={pageIndex === 0}
+                >
+                  First
+                </Button>
+                <Button 
+                  onClick={() => setPageIndex(pageIndex - 1)} 
+                  disabled={pageIndex === 0}
+                >
+                  Previous
+                </Button>
+                <Button 
+                  onClick={() => setPageIndex(pageIndex + 1)} 
+                  disabled={pageIndex >= totalPages - 1}
+                >
+                  Next
+                </Button>
+                <Button 
+                  onClick={() => setPageIndex(totalPages - 1)} 
+                  disabled={pageIndex >= totalPages - 1}
+                >
+                  Last
+                </Button>
+                <span className="ml-4">Rows per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={e => {
+                    setPageSize(Number(e.target.value));
+                    setPageIndex(0); // Reset to first page when changing page size
+                  }}
+                  className="border rounded px-2 py-1"
+                >
+                  {[10, 20, 50, 100].map(size => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </>
         )}
       </div>
       <SettingsDialog

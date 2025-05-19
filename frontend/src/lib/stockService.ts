@@ -54,7 +54,7 @@ export const getSortedStocks = (
 
 // Get available timeframes
 export const getTimeFrames = (): TimeFrame[] => {
-  return ['1D', '3D', '1W', '2W', '1M', '3M', '6M', '1Y', '2Y', '3Y'];
+  return ['1d', '3d','5d', '1wk', '2wk', '1mo', '3mo',];
 };
 
 // Fetch stocks from Supabase

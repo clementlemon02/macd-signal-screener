@@ -8,7 +8,6 @@ import { getStockBySymbol, getTimeFrames } from '@/lib/stockService';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import SignalIndicator from '@/components/SignalIndicator';
 import { useToast } from '@/components/ui/use-toast';
 

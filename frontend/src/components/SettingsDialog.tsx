@@ -35,7 +35,7 @@ interface SettingsDialogProps {
   onSignalConfigChange: (value: SignalDisplayConfig[]) => void;
 }
 
-const timeframes: TimeFrame[] = ['D', '2D', '3D', '4D', 'W', '2W', '3W', 'M', '2M', '3M', '4M', '5M'];
+const timeframes: TimeFrame[] = ['1d', '2d', '3d', '5d', '1wk', '2wk', '3wk', '1mo', '2mo', '3mo', '4mo', '5mo'];
 const macdDayOptions = [3, 5, 7, 10, 14, 21, 30];
 const priceChartDayOptions = [7, 14, 30, 60, 90, 180];
 

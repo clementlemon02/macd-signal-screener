@@ -89,10 +89,11 @@ export const formatPercent = (value: number): string => {
 
 // Format a price value
 export const formatPrice = (value: number): string => {
+  const minimumFractionDigits = value < 1.0 ? 6 : 2;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    minimumFractionDigits,
+    maximumFractionDigits: minimumFractionDigits
   }).format(value);
 };

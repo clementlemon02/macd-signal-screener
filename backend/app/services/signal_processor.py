@@ -48,7 +48,7 @@ class SignalProcessor:
                 'close_price': float(df['close'].iloc[-1]),
                 'macd_line': float(macd_data['macd_line'][-1]),
                 'signal_line': float(macd_data['signal_line'][-1]),
-                'macd_histogram': float(macd_data['histogram'][-1]),
+                'macd_histogram': float(macd_data['macd_histogram'][-1]),
                 'ema_mid': float(ema_midpoints[-1]),
                 'signal_1': bool(latest_signal.get('signal_1', False)),
                 'signal_2': bool(latest_signal.get('signal_2', False)),
