@@ -18,8 +18,7 @@ export type TimeFrame =
   | 'SIGNAL_3'
   | 'SIGNAL_4'
   | 'SIGNAL_5'
-  | 'SIGNAL_6'
-  | 'SIGNAL_7';
+  | 'SIGNAL_6';
 
 
 export interface Signal {
@@ -125,3 +124,30 @@ export interface StockWithMacdHistory {
   signalCounts?: Record<string, number>; // signalCounts is now Record<string, number>
   totalPositiveSignals?: Record<string, number>; 
 }
+
+
+export type SingleStockWithMacdHistory = {
+  symbol: string;
+  name: string;
+  price: number;
+  change;
+  macdHistory: Record<string, {
+    date: string;
+    macdLine: number;
+    signalLine: number;
+    histogram: number;
+  }[]>;
+  priceHistory: { date: string; price: number }[];
+  signals: Record<string, SignalFlags[]>;
+};
+export type SignalTriggered = {
+  date: string;
+  triggeredSignals: string[]; // e.g. ['signal_1', 'signal_4']
+};
+
+export type MacdHistoryEntry = {
+  date: string;
+  macdLine: number;
+  signalLine: number;
+  histogram: number;
+};

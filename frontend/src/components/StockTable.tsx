@@ -9,8 +9,8 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Signal, SignalDisplayConfig, SignalFlags, SortConfig, SortDirection, SortField, StockWithMacdHistory, TimeFrame } from '@/lib/types';
-import { fetchStocksPageFromSupabase, getLatestCreatedAt } from '@/lib/supabaseService';
+import { Signal, SignalDisplayConfig, SignalFlags, SingleStockWithMacdHistory, SortConfig, SortDirection, SortField, StockWithMacdHistory, TimeFrame } from '@/lib/types';
+import { fetchStocksPageFromSupabase, fetchWatchlistStocksFromSupabase, getLatestCreatedAt } from '@/lib/supabaseService';
 import { formatPercent, formatPrice } from '@/lib/macdService';
 
 import { Button } from '@/components/ui/button';
@@ -43,7 +43,7 @@ const STORAGE_KEYS = {
 };
 
 
-const DEFAULT_SORT: SortConfig = { field: '1d', direction: 'desc' };
+const DEFAULT_SORT: SortConfig = { field: 'symbol', direction: 'asc' };
 const DEFAULT_MACD_DAYS = 7;
 const DEFAULT_PRICE_CHART_DAYS = 30;
 const DEFAULT_SIGNAL_CONFIG: SignalDisplayConfig[] = [
@@ -82,13 +82,7 @@ const DEFAULT_SIGNAL_CONFIG: SignalDisplayConfig[] = [
     label: 'Signal 6',
     description: 'MACD line turns upward, making a higher point than the previous',
     enabled: true,
-  },
-  {
-    type: 'SIGNAL_7',
-    label: 'Signal 7',
-    description: 'MACD line crosses above signal line while both are above zero and rising',
-    enabled: true,
-  },
+  }
 ];
 
 
@@ -103,7 +97,7 @@ const StockTable: React.FC = () => {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
   const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
-  const [stocks, setStocks] = useState<StockWithMacdHistory[]>([]);
+  const [stocks, setStocks] = useState<SingleStockWithMacdHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTimeframes, setSelectedTimeframes] = useState<TimeFrame[]>(() => {
     const stored = localStorage.getItem(STORAGE_KEYS.SELECTED_TIMEFRAMES);
@@ -135,6 +129,7 @@ const StockTable: React.FC = () => {
   const navigate = useNavigate();
   const { watchlist } = useWatchlist();
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [selectedTimeFrame, setSelectedTimeFrame] = useState<TimeFrame>('1d');
 
 
   // Function to normalize timeframe for database
@@ -178,24 +173,28 @@ const StockTable: React.FC = () => {
     setLoading(true);
     try {
       // If showing watchlist, fetch all stocks
-      const { data, total, uniqueSymbolCount } = await fetchStocksPageFromSupabase(
-        showWatchlistOnly ? 0 : page,
-        showWatchlistOnly ? 1000 : size,
-        selectedAssetType,
-        searchQuery,
-        sorting.length > 0 ? {
-          field: sorting[0].id,
-          direction: sorting[0].desc ? 'desc' : 'asc'
-        } : undefined
-      );
+      const { data, total, uniqueSymbolCount } = showWatchlistOnly
+      ? await fetchWatchlistStocksFromSupabase(watchlist, selectedAssetType)
+      : await fetchStocksPageFromSupabase(
+          page,
+          size,
+          selectedAssetType,
+          searchQuery,
+          sorting.length > 0 ? {
+            field: sorting[0].id,
+            direction: sorting[0].desc ? 'desc' : 'asc'
+          } : undefined
+        );
+
+
 
       if (showWatchlistOnly) {
-        // Filter the fetched data to only include watchlist items
-        const watchlistData = data.filter(stock => watchlist.includes(stock.symbol));
-        setStocks(watchlistData);
-        setTotalRows(watchlistData.length);
-        setUniqueSymbolCount(watchlistData.length);
+        console.log(data)
+        setStocks(data);
+        setTotalRows(data.length);
+        setUniqueSymbolCount(data.length);
       } else {
+        console.log(data)
         setStocks(data);
         // Use the total count from the backend
         setTotalRows(total || 0);
@@ -203,7 +202,6 @@ const StockTable: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching stocks:', error);
-      console.log(error)
       toast({
         title: 'Error loading stocks',
         description: 'There was a problem loading stock data. Please try again.',
@@ -258,8 +256,12 @@ const StockTable: React.FC = () => {
     });
   };
 
-  const handleRowClick = (symbol: string) => {
+  const handleNameClick = (symbol: string) => {
     navigate(`/stock/${encodeURIComponent(symbol)}`);
+  };
+
+  const handleTimeframeClick = (timeFrame: TimeFrame) => {
+    setSelectedTimeFrame(timeFrame);
   };
 
   const toggleWatchlistFilter = () => {
@@ -470,7 +472,10 @@ const StockTable: React.FC = () => {
         }
         
         return (
-          <div className="flex flex-col">
+          <div 
+            className="flex flex-col cursor-pointer hover:text-primary transition-colors"
+            onClick={() => handleNameClick(row.original.symbol)}
+          >
             <span className="font-medium">{row.original.symbol}</span>
             <span className="text-sm text-muted-foreground">{companyName}</span>
           </div>
@@ -533,7 +538,10 @@ const StockTable: React.FC = () => {
         };
         
         return (
-          <div>
+          <div 
+            className="cursor-pointer hover:bg-muted/30 transition-colors rounded p-1"
+            onClick={() => handleTimeframeClick(timeFrame)}
+          >
             <div className="flex flex-wrap justify-center gap-1.5 py-1">
               {filteredSignals.map((signal) => (
                 <SignalIndicator
@@ -598,20 +606,22 @@ const StockTable: React.FC = () => {
     },
     {
       id: 'macd',
-      header: `MACD (${macdDays}d)`,
+      header: `MACD (${selectedTimeFrame})`,
       cell: ({ row }) => {
-        return (
-        row.original.macdHistory && row.original.macdHistory.length > 0 ? (
+        const macdData = row.original.macdHistory?.[selectedTimeFrame];
+    
+        return macdData && macdData.length > 0 ? (
           <MacdMiniChart 
-            data={row.original.macdHistory.slice(-macdDays)} 
+            data={macdData}
+            selectedTimeFrame={selectedTimeFrame}
           />
         ) : (
           <div className="text-xs text-muted-foreground text-center">No data</div>
-        )
-      )},
+        );
+      },
       size: 160,
     },
-  ], [sortedSelectedTimeframes, sorting, priceChartDays, macdDays]);
+  ], [sortedSelectedTimeframes, sorting, priceChartDays, macdDays, selectedTimeFrame]);
 
   // Initialize table
   const table = useReactTable({
@@ -768,8 +778,7 @@ const StockTable: React.FC = () => {
                     table.getRowModel().rows.map(row => (
                       <tr
                         key={row.id}
-                        className="stock-row hover:bg-muted/20 transition-colors cursor-pointer"
-                        onClick={() => handleRowClick(row.original.symbol)}
+                        className="stock-row hover:bg-muted/20 transition-colors"
                       >
                         {row.getVisibleCells().map(cell => (
                           <td

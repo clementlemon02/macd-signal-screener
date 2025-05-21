@@ -12,19 +12,21 @@ import {
   XAxis,
   YAxis
 } from 'recharts';
+import { MacdData, TimeFrame } from '@/lib/types';
 
-import { MacdData } from '@/lib/types';
 import React from 'react';
 
 interface MacdMiniChartProps {
   data: MacdData[];
+  selectedTimeFrame: TimeFrame;
   width?: number;
   height?: number;
 }
 
 const MacdMiniChart: React.FC<MacdMiniChartProps> = ({ 
   data,
-  width = 160, // Increased from 120
+  selectedTimeFrame,
+  width = 160,
   height = 60
 }) => {
   const chartData = [...data].slice(-7); // Get last 7 days of data

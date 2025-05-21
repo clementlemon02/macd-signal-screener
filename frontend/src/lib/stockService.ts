@@ -1,4 +1,4 @@
-import { MacdData, SortConfig, Stock, StockWithSignalCounts, TimeFrame } from './types';
+import { MacdData, SingleStockWithMacdHistory, SortConfig, Stock, TimeFrame } from './types';
 import { calculateSignalCounts, sortStocks } from './macdService';
 import { fetchStocksFromSupabase, getStockBySymbolFromSupabase } from './supabaseService';
 
@@ -65,6 +65,6 @@ export const fetchStocks = async (): Promise<StockWithSignalCounts[]> => {
 // Get a single stock by symbol
 export const getStockBySymbol = async (
   symbol: string
-): Promise<StockWithSignalCounts | undefined> => {
+): Promise<SingleStockWithMacdHistory | undefined> => {
   return getStockBySymbolFromSupabase(symbol);
 };

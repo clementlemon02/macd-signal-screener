@@ -1,6 +1,5 @@
-import { MacdData, MacdHistoryItem, MacdSignal, PriceData, SignalFlags, Stock, StockSignals, StockWithMacdHistory, TimeFrame } from './types';
+import { MacdData, MacdHistoryEntry, MacdHistoryItem, MacdSignal, PriceData, SignalFlags, SingleStockWithMacdHistory, Stock, StockSignals, StockWithMacdHistory, TimeFrame } from './types';
 
-import { calculateSignalCounts } from './macdService';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -128,43 +127,129 @@ export const fetchStocksFromSupabase = async (): Promise<StockWithMacdHistory[]>
 };
 
 
-export const getStockBySymbolFromSupabase = async (symbol: string): Promise<StockWithMacdHistory | undefined> => {
+export type SignalTriggered = {
+  date: string;
+  triggeredSignals: string[]; // e.g. ['signal_1', 'signal_4']
+};
+
+
+export const getStockBySymbolFromSupabase = async (
+  symbol: string
+): Promise<StockWithMacdHistory | undefined> => {
   try {
     const { data: signals, error } = await supabase
-      .from('macd_signals')
-      .select('*')
-      .eq('symbol', symbol)
-      .order('date', { ascending: false });
+    .from('macd_signals')
+    .select('*')
+    .eq('symbol', symbol)
+    .order('date', { ascending: false })  // newest first
+    .limit(100);
 
     if (error) throw error;
-    if (!signals.length) return undefined;
+    if (!signals || signals.length === 0) return undefined;
 
-    const priceHistory = signals.map((signal: MacdSignal) => ({
+    const macdHistory = signals.map((signal) => ({
       date: signal.date,
-      price: signal.close_price
+      macdLine: signal.macd_line,
+      signalLine: signal.signal_line,
+      histogram: signal.macd_histogram,
     }));
 
-    const stock: Stock = {
-      symbol: signals[0].symbol,
-      name: signals[0].symbol,
-      price: signals[0].close_price,
-      change: calculatePriceChange(priceHistory),
-      signals: [],
-      macdHistory: signals.map((signal: MacdSignal) => ({
-        date: signal.date,
-        macdLine: signal.macd_line,
-        signalLine: signal.signal_line,
-        histogram: signal.macd_histogram
-      })),
-      priceHistory
-    };
+    const priceHistory = signals.map((signal) => ({
+      date: signal.date,
+      price: signal.close_price,
+    }));
 
-    return calculateSignalCounts(stock);
+    const signalsByTimeframe: Record<string, SignalTriggered[]> = {};
+    const activeSignalsByTimeframe: Record<string, Set<string>> = {};
+    
+    // Group signals by timeframe first
+    const groupedByTimeframe: Record<string, typeof signals> = {};
+    
+    for (const signal of signals) {
+      if (!groupedByTimeframe[signal.timeframe]) {
+        groupedByTimeframe[signal.timeframe] = [];
+      }
+      groupedByTimeframe[signal.timeframe].push(signal);
+    }
+    
+    // Now process each timeframe separately
+    for (const timeframe in groupedByTimeframe) {
+      const timeframeSignals = groupedByTimeframe[timeframe];
+      activeSignalsByTimeframe[timeframe] = new Set<string>();
+      signalsByTimeframe[timeframe] = [];
+    
+      for (let i = 0; i < timeframeSignals.length; i++) {
+        const curr = timeframeSignals[i];
+        const triggeredSignals: string[] = [];
+    
+        console.log(`\n🔍 Checking date: ${curr.date} | Timeframe: ${timeframe}`);
+    
+        // Check for signal 7 first (cycle end signal)
+        const isCycleEnd = curr.signal_7 === true;
+        if (isCycleEnd) {
+          console.log('🔄 Cycle end detected - resetting all signals');
+          activeSignalsByTimeframe[timeframe].clear();
+          triggeredSignals.push('signal_7');
+        } else {
+          // Process signals 1-6 only if we're not in a cycle end
+          for (let j = 1; j <= 6; j++) {
+            const key = `signal_${j}`;
+            const isActive = curr[key] === true;
+            const activeSignals = activeSignalsByTimeframe[timeframe];
+            const wasActive = activeSignals.has(key);
+    
+            if (isActive && !wasActive) {
+              console.log(`✅ New trigger: ${key}`);
+              triggeredSignals.push(key);
+              activeSignals.add(key);
+            } else if (!isActive && wasActive) {
+              console.log(`❌ Signal off: ${key}`);
+              activeSignals.delete(key);
+            } else {
+              console.log(`⏸ No change: ${key} | Status: ${isActive ? "active" : "inactive"}`);
+            }
+          }
+        }
+    
+        console.log(`📌 Result on ${curr.date}: triggeredSignals = [${triggeredSignals.join(", ")}]`);
+    
+        signalsByTimeframe[timeframe].push({
+          date: curr.date,
+          triggeredSignals,
+        });
+      }
+    }
+    
+    const latest = signals[signals.length - 1];
+    const previous = signals[signals.length - 2];
+
+    const change =
+      latest && previous
+        ? latest.close_price - previous.close_price
+        : undefined;
+
+    const priceChangePercent =
+      latest && previous && previous.close_price !== 0
+        ? ((latest.close_price - previous.close_price) / previous.close_price) * 100
+        : undefined;
+
+    return {
+      symbol: latest.symbol,
+      name: latest.symbol,
+      price: latest.close_price,
+      change,
+      priceChangePercent,
+      macdHistory,
+      priceHistory,
+      signals: signalsByTimeframe,
+    };
   } catch (error) {
     console.error('Error fetching stock from Supabase:', error);
     throw error;
   }
 };
+
+
 
 // Types
 type SortConfig = { field: string; direction: 'asc' | 'desc' };
@@ -195,15 +280,37 @@ const getLatestSignals = async (assetType?: string, searchQuery?: string) => {
   let query = supabase
     .from('macd_signals')
     .select('*')
-    .in('timeframe', ['1d'])
     .order('date', { ascending: false });
 
   if (assetType) query = query.eq('asset_type', assetType);
-  if (searchQuery) query = query.ilike('symbol', `%${searchQuery}%`);
+  if (searchQuery) {
+    query = query.or(`symbol.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`);
+  }
   
   const { data, error } = await query;
   if (error) throw error;
   return data;
+};
+
+export const getWatchlistSignals = async (
+  symbols: string[],
+  assetType?: string,
+  searchQuery?: string
+): Promise<MacdSignal[]> => {
+  if (!symbols.length) return [];
+
+  const { data, error } = await supabase
+    .from('macd_signals')
+    .select('*')
+    .in('symbol', symbols)
+    .order('date', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching watchlist signals:', error);
+    throw error;
+  }
+
+  return data ?? [];
 };
 
 // 4. Calculate and sort symbols by signal count
@@ -260,7 +367,6 @@ const getHistoricalData = async (symbols: string[]) => {
     .from('macd_signals')
     .select('*')
     .in('symbol', symbols)
-    .eq('timeframe', '1d')
     .gte('date', oneEightyDaysAgo.toISOString().split('T')[0])
     .order('date', { ascending: true });
 
@@ -291,9 +397,8 @@ const buildStockResult = (
   paginatedSymbols: string[],
   latestBySymbol: Map<string, MacdSignal>,
   grouped: GroupedData
-): StockWithMacdHistory[] => {
-  const now = new Date();
-  const oneEightyDaysAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+): SingleStockWithMacdHistory[] => {
+
 
   return paginatedSymbols.map(symbol => {
     const base = latestBySymbol.get(symbol)!;
@@ -317,39 +422,50 @@ const buildStockResult = (
     }, {} as Record<string, SignalFlags[]>);
 
     const allDates = groupedData.allHistory.map(row => new Date(row.date));
-    const latestDate = new Date(Math.max(...allDates.map(d => d.getTime())));
-    const thirtyDaysBefore = new Date(latestDate);
-    thirtyDaysBefore.setDate(thirtyDaysBefore.getDate() - 30);
 
-    const macdHistory = groupedData.allHistory
-      .filter(row => new Date(row.date) >= thirtyDaysBefore)
-      .map(row => ({
+
+
+    const macdHistoryByTf: Record<string, MacdHistoryEntry[]> = {};
+    
+
+    TIMEFRAMES.forEach(tf => {
+      const tfRows = groupedData.allHistory
+        .filter(row => row.timeframe === tf)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 30) // keep latest 50 rows
+        .reverse(); // to keep chronological order if needed
+    
+      macdHistoryByTf[tf] = tfRows.map(row => ({
         date: row.date,
         macdLine: row.macd_line,
         signalLine: row.signal_line,
         histogram: row.macd_histogram
       }));
+    });
+    
 
-    const priceHistory = groupedData.allHistory
-      .filter(row => new Date(row.date) >= oneEightyDaysAgo)
-      .map(row => ({
-        date: row.date,
-        price: row.close_price
-      }));
+    const sortedHistory = groupedData.allHistory
+    .filter(row => row.timeframe === '1d')                      // only '1d' timeframe
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());  // sort by date ascending
+  
+  const priceHistory = sortedHistory
+    .slice(-180)  // get the most recent 180 rows
+    .map(row => ({
+      date: row.date,
+      price: row.close_price
+    }));
+  
 
     const change = calculatePriceChange(priceHistory);
-
     return {
       symbol: base.symbol,
       name: base.symbol,
       price: base.close_price,
       change,
-      macdHistory,
+      macdHistory: macdHistoryByTf,
       priceHistory,
       signals: signalPerTimeframe,
-      signalCounts: {},
-      totalPositiveSignals: {}
-    };
+    };    
   });
 };
 
@@ -362,7 +478,7 @@ export const fetchStocksPageFromSupabase = async (
   assetType?: string,
   searchQuery?: string,
   sortConfig?: SortConfig
-): Promise<{ data: StockWithMacdHistory[]; total: number; uniqueSymbolCount: number }> => {
+): Promise<{ data: SingleStockWithMacdHistory[]; total: number; uniqueSymbolCount: number }> => {
   try {
     const total = await getSymbolCount(assetType, searchQuery);
     const uniqueSymbolCount = await getUniqueSymbolCount();
@@ -373,20 +489,24 @@ export const fetchStocksPageFromSupabase = async (
     let sortedSymbols: string[];
     let signalCounts: Map<string, number> | undefined;
 
-    if (sortConfig?.field && ['1d', '2d', '3d', '5d', '1wk', '2wk', '3wk', '1mo', '2mo', '3mo', '4mo', '5mo'].includes(sortConfig.field)) {
-      const sorted = await getSortedSymbolsBySignal(sortConfig.field, sortConfig.direction, assetType, searchQuery);
+    // If no sort config is provided, default to sorting by symbol in ascending order
+    const effectiveSortConfig = sortConfig || { field: 'symbol', direction: 'asc' };
+
+    if (effectiveSortConfig.field && ['1d', '2d', '3d', '5d', '1wk', '2wk', '3wk', '1mo', '2mo', '3mo', '4mo', '5mo'].includes(effectiveSortConfig.field)) {
+      const sorted = await getSortedSymbolsBySignal(effectiveSortConfig.field, effectiveSortConfig.direction, assetType, searchQuery);
       sortedSymbols = sorted.sortedSymbols;
       signalCounts = sorted.signalCounts;
-    } else if (sortConfig?.field === 'price') {
+    } else if (effectiveSortConfig.field === 'price') {
       // Sort by price
       sortedSymbols = Array.from(latestBySymbol.keys()).sort((a, b) => {
         const priceA = latestBySymbol.get(a)?.close_price || 0;
         const priceB = latestBySymbol.get(b)?.close_price || 0;
-        return sortConfig.direction === 'asc' ? priceA - priceB : priceB - priceA;
+        return effectiveSortConfig.direction === 'asc' ? priceA - priceB : priceB - priceA;
       });
     } else {
+      // Default to sorting by symbol
       sortedSymbols = Array.from(latestBySymbol.keys()).sort((a, b) =>
-        sortConfig?.direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
+        effectiveSortConfig.direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
       );
     }
 
@@ -404,6 +524,64 @@ export const fetchStocksPageFromSupabase = async (
     return { data: result, total, uniqueSymbolCount };
   } catch (error) {
     console.error('Error fetching stocks:', error);
+    return { data: [], total: 0, uniqueSymbolCount: 0 };
+  }
+};
+
+export const fetchWatchlistStocksFromSupabase = async (
+  watchlistSymbols: string[],
+  assetType?: string,
+  page: number = 0,
+  pageSize: number = 20,
+  sortConfig?: SortConfig
+): Promise<{ data: SingleStockWithMacdHistory[]; total: number; uniqueSymbolCount: number }> => {
+  try {
+    if (!watchlistSymbols.length) return { data: [], total: 0, uniqueSymbolCount: 0 };
+
+    const latestSignals = await getWatchlistSignals(watchlistSymbols);
+
+    const latestBySymbol = new Map(
+      latestSignals
+        .filter(s => watchlistSymbols.includes(s.symbol))
+        .map(s => [s.symbol, s])
+    );
+
+    let sortedSymbols: string[] = Array.from(latestBySymbol.keys());
+
+    if (sortConfig?.field && ['1d', '2d', '3d', '5d', '1wk', '2wk', '3wk', '1mo', '2mo', '3mo', '4mo', '5mo'].includes(sortConfig.field)) {
+      const sorted = await getSortedSymbolsBySignal(sortConfig.field, sortConfig.direction, assetType);
+      sortedSymbols = sorted.sortedSymbols.filter(symbol => latestBySymbol.has(symbol));
+    } else if (sortConfig?.field === 'price') {
+      sortedSymbols.sort((a, b) => {
+        const priceA = latestBySymbol.get(a)?.close_price || 0;
+        const priceB = latestBySymbol.get(b)?.close_price || 0;
+        return sortConfig.direction === 'asc' ? priceA - priceB : priceB - priceA;
+      });
+    } else if (sortConfig?.field === 'symbol') {
+      sortedSymbols.sort((a, b) =>
+        sortConfig.direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
+      );
+    }
+
+    const paginatedSymbols = paginateSymbols(sortedSymbols, page, pageSize);
+
+
+    const [timeframesData, historicalData] = await Promise.all([
+      getAllTimeframesData(paginatedSymbols),
+      getHistoricalData(paginatedSymbols)
+    ]);
+
+    const grouped = groupData(timeframesData, historicalData);
+
+    const result = buildStockResult(paginatedSymbols, latestBySymbol, grouped);
+
+    return {
+      data: result,
+      total: sortedSymbols.length,
+      uniqueSymbolCount: sortedSymbols.length
+    };
+  } catch (error) {
+    console.error('Error fetching watchlist stocks:', error);
     return { data: [], total: 0, uniqueSymbolCount: 0 };
   }
 };

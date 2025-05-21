@@ -89,8 +89,9 @@ class BatchMacdService:
                     cycle_id += 1
                     current_cycle_step = 1
                     cycle_memory = {f'signal_{n}': False for n in range(1, 8)}  # Reset memory
-
+                    cycle_memory['signal_7'] = False
                     cycle_memory['signal_1'] = True
+                    
                     self.data.loc[self.data.index[i], 'signal_1'] = True
                     self.data.loc[self.data.index[i], 'meta_cycle_id'] = cycle_id
                     self.data.loc[self.data.index[i], 'meta_condition'] = "Bearish MACD crossover above zero"
@@ -131,6 +132,8 @@ class BatchMacdService:
 
                     if current_cycle_step == 6 and (prev_macd < prev_signal) and (macd > signal):
                         cycle_memory['signal_7'] = True
+                        for n in range(1, 7):
+                            cycle_memory[f'signal_{n}'] = False
                         self.data.loc[self.data.index[i], 'signal_7'] = True
                         self.data.loc[self.data.index[i], 'meta_condition'] = "Bullish MACD crossover"
                         current_cycle_step = 0  # Reset cycle step — new cycle can start

@@ -25,7 +25,7 @@ const StockHeaderCell: React.FC<StockHeaderCellProps> = ({
   const isActive = currentSort?.id === field;
   
   return (
-    <th 
+    <div 
       className={cn(
         'px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none',
         isActive && 'text-primary',
@@ -45,7 +45,7 @@ const StockHeaderCell: React.FC<StockHeaderCellProps> = ({
           </span>
         )}
       </div>
-    </th>
+    </div>
   );
 };
 

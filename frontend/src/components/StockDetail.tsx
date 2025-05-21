@@ -1,15 +1,43 @@
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import React, { useEffect, useState } from 'react';
-import { StockWithSignalCounts, TimeFrame } from '@/lib/types';
+import { SignalDisplayConfig, SignalFlags, SignalType, SingleStockWithMacdHistory, StockWithMacdHistory, TimeFrame } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatPercent, formatPrice } from '@/lib/macdService';
 import { getStockBySymbol, getTimeFrames } from '@/lib/stockService';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import SignalHistoryTable from '@/components/SignalHistoryTable';
 import SignalIndicator from '@/components/SignalIndicator';
+import mappingDirectoryTradV from '@/lib/mapping_directoryTradV.json';
 import { useToast } from '@/components/ui/use-toast';
+
+const TIMEFRAMES: TimeFrame[] = ['1d', '2d', '3d', '5d', '1wk', '2wk', '3wk', '1mo', '2mo', '3mo', '4mo', '5mo'];
+
+// Add TradingView widget type
+declare global {
+  interface Window {
+    TradingView: {
+      widget: new (config: TradingViewWidgetConfig) => unknown;
+    };
+  }
+}
+
+interface TradingViewWidgetConfig {
+  width: string;
+  height: number;
+  symbol: string;
+  interval: string;
+  timezone: string;
+  theme: string;
+  style: string;
+  locale: string;
+  toolbar_bg: string;
+  enable_publishing: boolean;
+  allow_symbol_change: boolean;
+  container_id: string;
+}
 
 const TradingViewWidget: React.FC<{ symbol: string }> = ({ symbol }) => {
   useEffect(() => {
@@ -18,112 +46,53 @@ const TradingViewWidget: React.FC<{ symbol: string }> = ({ symbol }) => {
     script.async = true;
     script.onload = () => {
       if (typeof window.TradingView !== 'undefined') {
-        // Format symbol for TradingView
-        const formattedSymbol = symbol.includes('/') 
-          ? symbol.replace('/', '') // For crypto pairs like BTC/USD -> BTCUSD
-          : symbol;
+        // Get the mapped symbol from mapping_directoryTradV.json
+        let formattedSymbol = symbol;
+        
+        // Check in each category
+        for (const category in mappingDirectoryTradV) {
+          if (mappingDirectoryTradV[category][symbol]) {
+            formattedSymbol = mappingDirectoryTradV[category][symbol];
+            break;
+          }
+        }
 
         new window.TradingView.widget({
-          autosize: true,
+          width: '100%',
+          height: 500,
           symbol: formattedSymbol,
           interval: 'D',
           timezone: 'Etc/UTC',
           theme: 'dark',
           style: '1',
           locale: 'en',
-          toolbar_bg: '#1E293B',
+          toolbar_bg: '#f1f3f6',
           enable_publishing: false,
           allow_symbol_change: true,
-          save_image: true,
-          container_id: 'tradingview_widget',
-          hide_side_toolbar: false,
-          show_popup_button: true,
-          popup_width: '1000',
-          popup_height: '650',
-          studies: [
-            {
-              id: 'MACD@tv-basicstudies',
-              inputs: {
-                fastLength: 12,
-                slowLength: 26,
-                signalLength: 9,
-                source: 'close'
-              }
-            },
-            {
-              id: "Script@tv-scripting-101",
-              scriptSource: `
-                //@version=5
-                indicator("MACD Signals", overlay=true)
-
-                // MACD Parameters
-                fast_length = input(12)
-                slow_length = input(26)
-                signal_length = input(9)
-
-                // Calculate MACD
-                [macdLine, signalLine, histLine] = ta.macd(close, fast_length, slow_length, signal_length)
-
-                // Generate signals
-                buySignal = ta.crossover(macdLine, signalLine) and histLine > 0
-                sellSignal = ta.crossunder(macdLine, signalLine) and histLine < 0
-
-                // Plot arrows
-                plotshape(buySignal, style=shape.triangleup, location=location.belowbar, color=color.new(#22c55e, 0), size=size.normal, text="Buy")
-                plotshape(sellSignal, style=shape.triangledown, location=location.abovebar, color=color.new(#ef4444, 0), size=size.normal, text="Sell")
-              `
-            }
-          ],
-          overrides: {
-            "mainSeriesProperties.candleStyle.upColor": "#22c55e",
-            "mainSeriesProperties.candleStyle.downColor": "#ef4444",
-            "mainSeriesProperties.candleStyle.borderUpColor": "#22c55e",
-            "mainSeriesProperties.candleStyle.borderDownColor": "#ef4444",
-            "mainSeriesProperties.candleStyle.wickUpColor": "#22c55e",
-            "mainSeriesProperties.candleStyle.wickDownColor": "#ef4444",
-            "scalesProperties.lineColor": "#94a3b8",
-            "scalesProperties.textColor": "#94a3b8",
-            "paneProperties.background": "#0f172a",
-            "paneProperties.vertGridProperties.color": "#1e293b",
-            "paneProperties.horzGridProperties.color": "#1e293b",
-            "symbolWatermarkProperties.transparency": 90,
-            "scalesProperties.showStudyLastValue": true
-          },
-          studies_overrides: {
-            "MACD.histogram.color.0": "rgba(248, 113, 113, 0.8)",
-            "MACD.histogram.color.1": "rgba(52, 211, 153, 0.8)",
-            "MACD.histogram.linewidth": 2,
-            "MACD.signal.color": "#EC4899",
-            "MACD.signal.linewidth": 2,
-            "MACD.macd.color": "#3B82F6",
-            "MACD.macd.linewidth": 2
-          }
+          container_id: 'tradingview_widget'
         });
       }
     };
     document.head.appendChild(script);
 
     return () => {
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
+      document.head.removeChild(script);
     };
   }, [symbol]);
 
-  return (
-    <div id="tradingview_widget" className="w-full h-[600px] rounded-lg border border-border"></div>
-  );
+  return <div id="tradingview_widget" />;
 };
 
 const StockDetail: React.FC = () => {
   const { symbol: encodedSymbol } = useParams<{ symbol: string }>();
   const symbol = encodedSymbol ? decodeURIComponent(encodedSymbol) : '';
-  const [stock, setStock] = useState<StockWithSignalCounts | null>(null);
+  const [stock, setStock] = useState<SingleStockWithMacdHistory | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedTimeFrame, setSelectedTimeFrame] = useState<TimeFrame>('D');
+  const [selectedTimeFrame, setSelectedTimeFrame] = useState<TimeFrame>('1d');
   const { toast } = useToast();
   const navigate = useNavigate();
   const timeFrames = getTimeFrames();
+
 
   useEffect(() => {
     const loadStock = async () => {
@@ -134,8 +103,8 @@ const StockDetail: React.FC = () => {
         const stockData = await getStockBySymbol(symbol);
         if (stockData) {
           setStock(stockData);
-          if (stockData.signals.length > 0) {
-            setSelectedTimeFrame(stockData.signals[0].timeFrame);
+          if (stockData.signals && Object.keys(stockData.signals).length > 0) {
+            setSelectedTimeFrame(Object.keys(stockData.signals)[0] as TimeFrame);
           }
         } else {
           toast({
@@ -192,7 +161,13 @@ const StockDetail: React.FC = () => {
     );
   }
 
-  const selectedSignals = stock.signals.find(s => s.timeFrame === selectedTimeFrame)?.signals || [];
+  const selectedSignals = stock?.signals[selectedTimeFrame]?.[0] ? Object.entries(stock.signals[selectedTimeFrame][0])
+    .filter(([key]) => key.startsWith('signal_'))
+    .map(([key, value]) => ({
+      type: key.toUpperCase() as SignalType,
+      value: value as boolean,
+      date: stock.signals[selectedTimeFrame][0].date
+    })) : [];
 
   return (
     <div className="container mx-auto py-8 px-4 sm:px-6 lg:max-w-6xl animate-fade-in">
@@ -242,26 +217,27 @@ const StockDetail: React.FC = () => {
           <Tabs defaultValue="signals" className="w-full">
             <TabsList>
               <TabsTrigger value="signals">MACD Signals</TabsTrigger>
-              <TabsTrigger value="performance">Performance</TabsTrigger>
             </TabsList>
             <TabsContent value="signals" className="pt-4">
               <div className="mb-6">
                 <h3 className="text-xl font-semibold mb-4">MACD Signals by Timeframe</h3>
                 <div className="flex flex-wrap gap-2 mb-6">
-                  {stock.signals.map(signalGroup => (
-                    <Button
-                      key={signalGroup.timeFrame}
-                      variant={selectedTimeFrame === signalGroup.timeFrame ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSelectedTimeFrame(signalGroup.timeFrame)}
-                      className="rounded-full"
-                    >
-                      {signalGroup.timeFrame}
-                    </Button>
-                  ))}
+                  {TIMEFRAMES
+                    .filter(timeFrame => stock.signals[timeFrame])
+                    .map(timeFrame => (
+                      <Button
+                        key={timeFrame}
+                        variant={selectedTimeFrame === timeFrame ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedTimeFrame(timeFrame)}
+                        className="rounded-full"
+                      >
+                        {timeFrame}
+                      </Button>
+                    ))}
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                   {selectedSignals.map(signal => {
                     const signalName = signal.type.replace(/_/g, ' ');
                     return (
@@ -289,42 +265,11 @@ const StockDetail: React.FC = () => {
                     );
                   })}
                 </div>
-              </div>
-            </TabsContent>
-            <TabsContent value="performance" className="pt-4">
-              <h3 className="text-xl font-semibold mb-4">Signal Performance</h3>
-              <div className="glass-card rounded-lg p-4">
-                <table className="min-w-full">
-                  <thead>
-                    <tr>
-                      <th className="text-left py-2 px-4 text-sm font-medium">Timeframe</th>
-                      <th className="text-left py-2 px-4 text-sm font-medium">Active Signals</th>
-                      <th className="text-left py-2 px-4 text-sm font-medium">Signal Strength</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stock.signalCounts.map(sc => (
-                      <tr key={sc.timeFrame} className="border-t border-border">
-                        <td className="py-3 px-4">{sc.timeFrame}</td>
-                        <td className="py-3 px-4">
-                          {sc.positiveCount} / {sc.totalPossible}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                            <div 
-                              className={`h-full rounded-full ${
-                                sc.positiveCount / sc.totalPossible > 0.5 
-                                  ? 'bg-signal-positive' 
-                                  : 'bg-signal-negative'
-                              }`}
-                              style={{ width: `${(sc.positiveCount / sc.totalPossible) * 100}%` }}
-                            ></div>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+                <SignalHistoryTable 
+                  signals={stock}
+                  selectedTimeFrame={selectedTimeFrame}
+                />
               </div>
             </TabsContent>
           </Tabs>
@@ -333,13 +278,5 @@ const StockDetail: React.FC = () => {
     </div>
   );
 };
-
-declare global {
-  interface Window {
-    TradingView: {
-      widget: any;
-    };
-  }
-}
 
 export default StockDetail;

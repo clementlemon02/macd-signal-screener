@@ -29,10 +29,16 @@ async def process_signals():
     try:
         for interval in intervals:
             print(f"\nFetching signals for interval: {interval}")
-            
+
+            # Determine appropriate period based on interval type
+            if interval.endswith('d'):
+                period = '1y'
+            else:
+                period = '3y'
+
             signals = await batch_signal_processor.process_symbols(
                 symbols,
-                period='6mo',  
+                period=period,
                 interval=interval,
                 asset_types=asset_types
             )
@@ -52,6 +58,7 @@ async def process_signals():
 
     except Exception as e:
         print(f"Error processing symbols: {str(e)}")
+
 
 async def main():
     print(f"Starting signal processing at {datetime.now()}")
