@@ -362,17 +362,23 @@ const getAllTimeframesData = async (symbols: string[]) => {
 
 // 7. Fetch historical data (180 days)
 const getHistoricalData = async (symbols: string[]) => {
-  const oneEightyDaysAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
-  const { data, error } = await supabase
-    .from('macd_signals')
-    .select('*')
-    .in('symbol', symbols)
-    .gte('date', oneEightyDaysAgo.toISOString().split('T')[0])
-    .order('date', { ascending: true });
+  const allData = await Promise.all(
+    symbols.map(async (symbol) => {
+      const { data, error } = await supabase
+        .from('macd_signals')
+        .select('*')
+        .eq('symbol', symbol)
+        .order('date', { ascending: false });
 
-  if (error) throw error;
-  return data;
+      if (error) throw error;
+      return data.reverse(); // Return in chronological order
+    })
+  );
+
+  return allData.flat(); 
 };
+
+
 
 // 8. Group data by symbol
 const groupData = (timeframes: MacdSignal[], history: MacdSignal[]): GroupedData => {
@@ -420,13 +426,12 @@ const buildStockResult = (
         : [];
       return acc;
     }, {} as Record<string, SignalFlags[]>);
-
-    const allDates = groupedData.allHistory.map(row => new Date(row.date));
-
+    
 
 
     const macdHistoryByTf: Record<string, MacdHistoryEntry[]> = {};
     
+    console.log("GROUPEDDATD",groupedData.allHistory);
 
     TIMEFRAMES.forEach(tf => {
       const tfRows = groupedData.allHistory
@@ -434,6 +439,7 @@ const buildStockResult = (
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 30) // keep latest 50 rows
         .reverse(); // to keep chronological order if needed
+        console.log(tfRows)
     
       macdHistoryByTf[tf] = tfRows.map(row => ({
         date: row.date,
@@ -441,6 +447,8 @@ const buildStockResult = (
         signalLine: row.signal_line,
         histogram: row.macd_histogram
       }));
+      console.log(`Timeframe: ${tf}, Entries: ${tfRows.length}`);
+
     });
     
 

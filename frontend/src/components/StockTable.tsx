@@ -101,7 +101,7 @@ const StockTable: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedTimeframes, setSelectedTimeframes] = useState<TimeFrame[]>(() => {
     const stored = localStorage.getItem(STORAGE_KEYS.SELECTED_TIMEFRAMES);
-    return stored ? JSON.parse(stored) : ['1d', '1wk', '1mo', '3mo', '2d', '3d', '5d', '2wk'];
+    return stored ? JSON.parse(stored) : ['1d', '1wk', '1mo', '3mo', '2d', '3d', '5d', '2wk','2mo','3mo','4mo','5mo'];
   });
   const [macdDays, setMacdDays] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEYS.MACD_DAYS);
