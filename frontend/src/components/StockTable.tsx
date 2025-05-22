@@ -492,24 +492,22 @@ const StockTable: React.FC = () => {
         onSort={() => handleSort('price')} 
       />,
       cell: ({ row }) => {
-        return(
-        <div className="flex flex-col">
-          <span className="font-medium">{formatPrice(row.original.price)}</span>
-          <span className={`text-sm ${row.original.change >= 0 ? 'text-signal-positive' : 'text-signal-negative'}`}>
-            {formatPercent(row.original.change)}
-          </span>
-          <div className="h-8 mt-1">
-            {row.original.priceHistory && row.original.priceHistory.length > 0 ? (
-              <MiniPriceChart 
-                data={row.original.priceHistory} 
+        const stock = row.original;
+        return (
+          <div className="flex flex-col">
+            <span className="font-medium">{formatPrice(stock.price)}</span>
+            <span className={`text-sm ${stock.change >= 0 ? 'text-signal-positive' : 'text-signal-negative'}`}>
+              {formatPercent(stock.change)}
+            </span>
+            <div className="h-[60px] mt-1">
+              <MiniPriceChart
+                data={stock.priceHistory}
                 days={priceChartDays}
               />
-            ) : (
-              <div className="text-xs text-muted-foreground text-center">No data</div>
-            )}
+            </div>
           </div>
-        </div>
-      )},
+        );
+      },
       size: 200,
     },
     ...sortedSelectedTimeframes.map(timeFrame => ({
@@ -608,15 +606,16 @@ const StockTable: React.FC = () => {
       id: 'macd',
       header: `MACD (${selectedTimeFrame})`,
       cell: ({ row }) => {
-        const macdData = row.original.macdHistory?.[selectedTimeFrame];
-    
-        return macdData && macdData.length > 0 ? (
-          <MacdMiniChart 
-            data={macdData}
-            selectedTimeFrame={selectedTimeFrame}
-          />
-        ) : (
-          <div className="text-xs text-muted-foreground text-center">No data</div>
+        const stock = row.original;
+        const timeframeData = stock.macdHistory[selectedTimeFrame] || [];
+        return (
+          <div className="w-[160px] h-[60px]">
+            <MacdMiniChart
+              data={timeframeData}
+              selectedTimeFrame={selectedTimeFrame}
+              days={macdDays}
+            />
+          </div>
         );
       },
       size: 160,

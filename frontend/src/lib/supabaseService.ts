@@ -431,13 +431,12 @@ const buildStockResult = (
 
     const macdHistoryByTf: Record<string, MacdHistoryEntry[]> = {};
     
-    console.log("GROUPEDDATD",groupedData.allHistory);
 
     TIMEFRAMES.forEach(tf => {
       const tfRows = groupedData.allHistory
         .filter(row => row.timeframe === tf)
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .slice(0, 30) // keep latest 50 rows
+        .slice(0, 60) // keep latest 60 rows
         .reverse(); // to keep chronological order if needed
         console.log(tfRows)
     

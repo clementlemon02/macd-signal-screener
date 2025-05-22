@@ -21,22 +21,23 @@ interface MacdMiniChartProps {
   selectedTimeFrame: TimeFrame;
   width?: number;
   height?: number;
+  days?: number;
 }
 
 const MacdMiniChart: React.FC<MacdMiniChartProps> = ({ 
   data,
   selectedTimeFrame,
   width = 160,
-  height = 60
+  height = 60,
+  days = 7
 }) => {
-  const chartData = [...data].slice(-7); // Get last 7 days of data
+  const chartData = [...data].slice(-days); // Get last N days of data based on the days prop
   
-  // Find min and max values for proper chart scaling
   const allValues = chartData.flatMap(d => [d.macdLine, d.signalLine, d.histogram]);
   const minValue = Math.min(...allValues);
   const maxValue = Math.max(...allValues);
   const domain: [number, number] = [
-    Math.min(minValue, 0) * 1.1, // Make sure 0 is included and add 10% padding
+    Math.min(minValue, 0) * 1.1,
     Math.max(maxValue, 0) * 1.1
   ];
 
@@ -44,30 +45,32 @@ const MacdMiniChart: React.FC<MacdMiniChartProps> = ({
     <div className="relative w-full h-full" style={{ width, height }}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
-          data={data}
+          data={chartData}
           margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
         >
           <XAxis dataKey="date" hide />
-          <YAxis hide domain={['auto', 'auto']} />
+          <YAxis hide domain={domain} />
           
-          {/* Histogram as bars */}
           <Bar 
             dataKey="histogram" 
             isAnimationActive={false}
-            barSize={width / (data.length * 2)} // Adjust bar size based on number of data points
+            barSize={width / (chartData.length * 2)}
           >
-            {data.map((entry, index) => (
-              <Cell 
-                key={`cell-${index}`}
-                fill={entry.histogram >= 0 ? 'rgba(52, 211, 153, 0.8)' : 'rgba(248, 113, 113, 0.8)'}
-              />
-            ))}
+            {chartData.map((entry, index) => {
+              const prev = chartData[index - 1]?.histogram ?? entry.histogram;
+              const isIncreasing = entry.histogram >= prev;
+              const color =
+                entry.histogram >= 0
+                  ? isIncreasing ? '#34D399' : '#BBF7D0'  // green vs light green
+                  : isIncreasing ? '#FECACA' : '#F87171'; // light red vs red
+
+              return <Cell key={`cell-${index}`} fill={color} />;
+            })}
           </Bar>
+
           
-          {/* Zero line */}
           <ReferenceLine y={0} stroke="#CBD5E1" strokeWidth={1} />
           
-          {/* MACD Line */}
           <Line
             type="monotone"
             dataKey="macdLine"
@@ -77,7 +80,6 @@ const MacdMiniChart: React.FC<MacdMiniChartProps> = ({
             isAnimationActive={false}
           />
           
-          {/* Signal Line */}
           <Line
             type="monotone"
             dataKey="signalLine"

@@ -21,7 +21,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import React from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Settings } from 'lucide-react';
 
 interface SettingsDialogProps {
@@ -38,6 +37,7 @@ interface SettingsDialogProps {
 const timeframes: TimeFrame[] = ['1d', '2d', '3d', '5d', '1wk', '2wk', '3wk', '1mo', '2mo', '3mo', '4mo', '5mo'];
 const macdDayOptions = [3, 5, 7, 10, 14, 21, 30];
 const priceChartDayOptions = [7, 14, 30, 60, 90, 180];
+const macdChartDayOptions = [7, 14, 30, 60];
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   selectedTimeframes,
@@ -131,48 +131,42 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             </TabsContent>
             <TabsContent value="chart" className="absolute inset-0 p-4">
               <ScrollArea className="h-full pr-4">
-                <div className="grid gap-6">
-                  <div className="grid gap-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="macdDays" className="text-right">
-                        MACD Chart
-                      </Label>
-                      <Select
-                        value={macdDays.toString()}
-                        onValueChange={(value) => onMacdDaysChange(parseInt(value))}
-                      >
-                        <SelectTrigger className="col-span-3">
-                          <SelectValue placeholder="Select MACD days" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {macdDayOptions.map((days) => (
-                            <SelectItem key={days} value={days.toString()}>
-                              {days} days
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="priceChartDays" className="text-right">
-                        Price Chart
-                      </Label>
-                      <Select
-                        value={priceChartDays.toString()}
-                        onValueChange={(value) => onPriceChartDaysChange(parseInt(value))}
-                      >
-                        <SelectTrigger className="col-span-3">
-                          <SelectValue placeholder="Select price chart days" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {priceChartDayOptions.map((days) => (
-                            <SelectItem key={days} value={days.toString()}>
-                              {days} days
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <Label>Price Chart Range (Days)</Label>
+                    <Select
+                      value={priceChartDays.toString()}
+                      onValueChange={(value) => onPriceChartDaysChange(parseInt(value))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select days" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {priceChartDayOptions.map((days) => (
+                          <SelectItem key={days} value={days.toString()}>
+                            {days} days
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>MACD Chart Range (Days)</Label>
+                    <Select
+                      value={macdDays.toString()}
+                      onValueChange={(value) => onMacdDaysChange(parseInt(value))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select days" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {macdChartDayOptions.map((days) => (
+                          <SelectItem key={days} value={days.toString()}>
+                            {days} days
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </ScrollArea>
