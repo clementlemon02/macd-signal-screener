@@ -14,3 +14,4 @@ twelvedata
 tqdm
 schedule==1.2.1
 pytz==2024.1
+aiohttp
