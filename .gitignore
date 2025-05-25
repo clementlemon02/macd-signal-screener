@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+*.pyc
+
+# Ignore all __pycache__ directories
+__pycache__/

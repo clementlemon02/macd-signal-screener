@@ -70,12 +70,13 @@ export const getTradingViewChartUrl = (symbol: string): string => {
 // Get explanation for each MACD signal type
 export const getMacdSignalExplanation = (signalType: string): string => {
   const explanations: Record<string, string> = {
-    MACD_CROSSOVER: "MACD line crosses above the signal line, indicating potential bullish momentum.",
-    MACD_CROSSUNDER: "MACD line crosses below the signal line, indicating potential bearish momentum.",
-    SIGNAL_ABOVE_ZERO: "MACD is above the zero line, indicating positive momentum.",
-    SIGNAL_BELOW_ZERO: "MACD is below the zero line, indicating negative momentum.",
-    HISTOGRAM_POSITIVE: "MACD histogram is positive, showing bullish divergence.",
-    HISTOGRAM_NEGATIVE: "MACD histogram is negative, showing bearish divergence."
+    SIGNAL_1: "Signal line crosses over MACD above zero line",
+    SIGNAL_2: "MACD line drops 60% from last peak point",
+    SIGNAL_3: "MACD line reaches a 45-degree slope downtrend",
+    SIGNAL_4: "Close price reaches midpoint of EMA52 and EMA24",
+    SIGNAL_5: "Histogram below zero turns white for 2 bars",
+    SIGNAL_6: "MACD line turns uptrend (higher than last point)",
+    SIGNAL_7: "MACD crosses signal line; both above zero and rising"
   };
   
   return explanations[signalType] || "Unknown signal type";
@@ -88,10 +89,11 @@ export const formatPercent = (value: number): string => {
 
 // Format a price value
 export const formatPrice = (value: number): string => {
+  const minimumFractionDigits = value < 1.0 ? 6 : 2;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    minimumFractionDigits,
+    maximumFractionDigits: minimumFractionDigits
   }).format(value);
 };

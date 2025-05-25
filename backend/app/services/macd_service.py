@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
+import cProfile
 from typing import List, Dict, Any
-from datetime import datetime, timedelta
+import time
 
 class MacdService:
     def __init__(self):
@@ -11,6 +12,7 @@ class MacdService:
         
     def calculate_macd(self, prices: List[float]) -> Dict[str, List[float]]:
         """Calculate MACD, Signal line, and Histogram"""
+        
         # Convert to numpy array for calculations
         prices_array = np.array(prices)
         
@@ -27,6 +29,11 @@ class MacdService:
         # Calculate Histogram
         histogram = macd_line - signal_line
         
+        print("MACD:", macd_line)
+        print("Signal:", signal_line)
+        print("Histogram:", histogram)
+        
+        
         return {
             "macd_line": macd_line.tolist(),
             "signal_line": signal_line.tolist(),
@@ -35,132 +42,133 @@ class MacdService:
     
     def _calculate_ema(self, data: np.ndarray, period: int) -> np.ndarray:
         """Calculate Exponential Moving Average"""
-        return pd.Series(data).ewm(span=period, adjust=False).mean().values
+        result = pd.Series(data).ewm(span=period, adjust=False).mean().values
+        return result
 
     def detect_signals(self, macd_data: Dict[str, List[float]], close_prices: List[float], ema_midpoints: List[float]) -> pd.DataFrame:
-        """Detect various MACD signals and add them to a DataFrame"""
-        # Prepare signals dataframe
-        signal_columns = ['signal_1', 'signal_2', 'signal_3', 'signal_4', 'signal_5', 'signal_6', 'signal_7', 'signal_8']
-        signals_df = pd.DataFrame(index=range(2, len(macd_data["macd_line"])))
+        """Detect MACD signals from the data"""
 
-        for col in signal_columns:
-            signals_df[col] = pd.NA  # Initialize with missing values
+        
+        # Create DataFrame from the input data
+        self.data = pd.DataFrame({
+            'macd_line': macd_data['macd_line'],
+            'signal_line': macd_data['signal_line'],
+            'histogram': macd_data['histogram'],
+            'close': close_prices,
+            'ema_midpoint': ema_midpoints
+        })
 
-        for i in range(2, len(macd_data["macd_line"])):
-            # Signal 1: Bearish Crossover
-            signals_df.loc[i, 'signal_1'] = (
-                (macd_data["signal_line"][i] > macd_data["macd_line"][i]) &
-                (macd_data["signal_line"][i-1] <= macd_data["macd_line"][i-1]) &
-                (macd_data["macd_line"][i] > 0) &
-                (macd_data["signal_line"][i] > 0)
-            )
+        for n in range(1, 8):
+            self.data[f'signal_{n}'] = False
 
-            # Signal 2: Sharp Drop (60% from peak)
-            peak_value = macd_data["macd_line"][i-1]
-            signals_df.loc[i, 'signal_2'] = (
-                (peak_value > 0) &
-                (macd_data["macd_line"][i] <= 0.4 * peak_value) &
-                (macd_data["macd_line"][i] > 0)
-            )
+        self.data['meta_cycle_id'] = pd.NA
+        self.data['meta_condition'] = pd.NA
 
-            # Signal 3: Close price crosses the EMA Midpoint line
-            close_below_then_above = (
-                (close_prices[i-1] < ema_midpoints[i-1]) &
-                (close_prices[i] >= ema_midpoints[i])
-            )
-            close_above_then_below = (
-                (close_prices[i-1] > ema_midpoints[i-1]) &
-                (close_prices[i] <= ema_midpoints[i])
-            )
-            close_proximity = abs(close_prices[i] - ema_midpoints[i]) < (0.001 * close_prices[i])
+        current_cycle_step = 0
+        cycle_id = 0
 
-            signals_df.loc[i, 'signal_3'] = (
-                close_below_then_above | close_above_then_below | close_proximity
-            )
+        for i in range(2, len(self.data)):
+            # Get scalar values with .iloc
+            macd = self.data['macd_line'].iloc[i]
+            signal = self.data['signal_line'].iloc[i]
+            hist = self.data['histogram'].iloc[i]
 
-            # Signal 4: Steep Downtrend with 45-degree angle check
-            angle = 0
-            if ((macd_data["macd_line"][i] > 0) &
-                (macd_data["macd_line"][i] < macd_data["macd_line"][i-1])):
-                angle = np.degrees(np.arctan2(
-                    float(macd_data["macd_line"][i] - macd_data["macd_line"][i-1]), 1))
-                signals_df.loc[i, 'signal_4'] = angle <= -45
+            prev_macd = self.data['macd_line'].iloc[i - 1]
+            prev_signal = self.data['signal_line'].iloc[i - 1]
+            prev_hist = self.data['histogram'].iloc[i - 1]
+
+            prev2_hist = self.data['histogram'].iloc[i - 2]
+            prev2_macd = self.data['macd_line'].iloc[i - 2]
+
+            close = self.data['close'].iloc[i]
+            ema_mid = self.data['ema_midpoint'].iloc[i] if 'ema_midpoint' in self.data.columns else None
+
+            if ema_mid is not None and pd.notna(ema_mid):
+                ema_mid = float(ema_mid)
             else:
-                signals_df.loc[i, 'signal_4'] = False
+                ema_mid = None
 
-            # Signal 5: Histogram Weakening
-            signals_df.loc[i, 'signal_5'] = (
-                (macd_data["histogram"][i] < 0) &
-                (macd_data["histogram"][i-1] < 0) &
-                (macd_data["histogram"][i-2] < 0) &
-                (macd_data["histogram"][i] > macd_data["histogram"][i-1]) &
-                (macd_data["histogram"][i-1] > macd_data["histogram"][i-2])
-            )
+            # Signal 1: Bearish MACD crossover above zero
+            if (prev_macd > prev_signal) and (macd < signal) and (macd > 0):
+                # Reset if already in a cycle
+                if current_cycle_step != 0:
+                    current_cycle_step = 0  # Reset the cycle
+                cycle_id += 1  # New cycle when signal_1 is detected
+                self.data.loc[self.data.index[i], 'signal_1'] = True
+                self.data.loc[self.data.index[i], 'meta_cycle_id'] = cycle_id
+                self.data.loc[self.data.index[i], 'meta_condition'] = "Bearish MACD crossover above zero"
+                current_cycle_step = 1
+                continue
 
-            # Signal 6: MACD Line Turns to Uptrend
-            signals_df.loc[i, 'signal_6'] = (
-                (macd_data["macd_line"][i] > macd_data["macd_line"][i-1]) &
-                (macd_data["macd_line"][i-1] < macd_data["macd_line"][i-2])
-            )
+            # Signal 2: MACD drops significantly from previous high
+            if current_cycle_step == 1 and macd < 0.4 * max(prev_macd, macd):
+                self.data.loc[self.data.index[i], 'signal_2'] = True
+                self.data.loc[self.data.index[i], 'meta_cycle_id'] = cycle_id
+                self.data.loc[self.data.index[i], 'meta_condition'] = "MACD dropped 60% from previous peak"
+                current_cycle_step = 2
+                continue
 
-            # Signal 7: Bullish Crossover
-            signals_df.loc[i, 'signal_7'] = (
-                (macd_data["macd_line"][i] > macd_data["signal_line"][i]) &
-                (macd_data["macd_line"][i-1] <= macd_data["signal_line"][i-1]) &
-                (macd_data["macd_line"][i] < 0)
-            )
+            # Signal 3: MACD angle down sharply (e.g., diff from prev)
+            macd_slope = macd - prev_macd
+            if current_cycle_step == 2 and macd_slope <= -0.1:
+                self.data.loc[self.data.index[i], 'signal_3'] = True
+                self.data.loc[self.data.index[i], 'meta_cycle_id'] = cycle_id
+                self.data.loc[self.data.index[i], 'meta_condition'] = "MACD steeply downward"
+                current_cycle_step = 3
+                continue
 
-            # Signal 8: Convergence and Divergence Detection between price and histogram
-            if i >= 3:
-                current_price = close_prices[i]
-                prev_price = close_prices[i-1]
-                prev2_price = close_prices[i-2]
+            # Signal 4: Price crosses EMA midpoint
+            if current_cycle_step == 3 and ema_mid is not None and close < ema_mid:
+                self.data.loc[self.data.index[i], 'signal_4'] = True
+                self.data.loc[self.data.index[i], 'meta_cycle_id'] = cycle_id
+                self.data.loc[self.data.index[i], 'meta_condition'] = "Close below EMA midpoint"
+                current_cycle_step = 4
+                continue
 
-                current_hist = macd_data["histogram"][i]
-                prev_hist = macd_data["histogram"][i-1]
-                prev2_hist = macd_data["histogram"][i-2]
+            # Signal 5: Histogram weakening (3 bars down in a row)
+            if current_cycle_step == 4 and hist < prev_hist < prev2_hist:
+                self.data.loc[self.data.index[i], 'signal_5'] = True
+                self.data.loc[self.data.index[i], 'meta_cycle_id'] = cycle_id
+                self.data.loc[self.data.index[i], 'meta_condition'] = "Histogram weakening 3 bars"
+                current_cycle_step = 5
+                continue
 
-                # Bearish Divergence: Price makes higher high but histogram makes lower high
-                price_higher_high = (current_price > prev_price) & (prev_price > prev2_price)
-                hist_lower_high = (current_hist < prev_hist) & (prev_hist > prev2_hist) & (current_hist > 0)
-                bearish_divergence = price_higher_high & hist_lower_high
+            # Signal 6: MACD starts turning up (reversal)
+            if current_cycle_step == 5 and macd > prev_macd and prev_macd < prev2_macd:
+                self.data.loc[self.data.index[i], 'signal_6'] = True
+                self.data.loc[self.data.index[i], 'meta_cycle_id'] = cycle_id
+                self.data.loc[self.data.index[i], 'meta_condition'] = "MACD upward reversal"
+                current_cycle_step = 6
+                continue
 
-                # Bullish Divergence: Price makes lower low but histogram makes higher low
-                price_lower_low = (current_price < prev_price) & (prev_price < prev2_price)
-                hist_higher_low = (current_hist > prev_hist) & (prev_hist < prev2_hist) & (current_hist < 0)
-                bullish_divergence = price_lower_low & hist_higher_low
+            # Signal 7: Bullish MACD crossover
+            if current_cycle_step == 6 and (prev_macd < prev_signal) and (macd > signal):
+                self.data.loc[self.data.index[i], 'signal_7'] = True
+                self.data.loc[self.data.index[i], 'meta_cycle_id'] = cycle_id
+                self.data.loc[self.data.index[i], 'meta_condition'] = "Bullish MACD crossover"
+                current_cycle_step = 0  # Reset after cycle completes
+                continue
 
-                # Signal is triggered if either bearish or bullish divergence is detected
-                signals_df.loc[i, 'signal_8'] = bearish_divergence | bullish_divergence
-
-        return signals_df
+        
+        return self.data
     
     def calculate_signals(self, macd_data: Dict[str, List[float]], close_prices: List[float], ema_midpoints: List[float]) -> List[Dict[str, Any]]:
         """Calculate MACD signals"""
+        
         signals_df = self.detect_signals(macd_data, close_prices, ema_midpoints)
         
         # Convert signals to list of dictionaries for consistency with the original signals format
         signal_list = []
         for _, row in signals_df.iterrows():
             signal_list.append(row.to_dict())
-
+        
+        
         return signal_list
     
     def calculate_ema_midpoints(self, close_prices: List[float]) -> List[float]:
-        """Calculate EMA midpoints for close prices"""
-        # Calculate EMA for closing prices
-        return self._calculate_ema(np.array(close_prices), self.fast_period).tolist()
+        """Calculate EMA midpoints for close prices"""        
+        ema_midpoints = self._calculate_ema(np.array(close_prices), self.fast_period).tolist()
+        
+        
+        return ema_midpoints
 
-
-# Example usage
-macd_service = MacdService()
-prices = [100, 102, 101, 99, 98, 100, 103, 104, 105]  # Example prices
-ema_midpoints = [99, 100, 100.5, 101, 101.2, 101.5, 102, 103, 104]  # Example EMA midpoints
-
-# Calculate MACD data
-macd_data = macd_service.calculate_macd(prices)
-
-# Calculate signals
-signals = macd_service.calculate_signals(macd_data, prices, ema_midpoints)
-
-print(signals)

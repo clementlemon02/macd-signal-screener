@@ -1,26 +1,25 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .core.config import settings
-from .api.endpoints import stocks, crypto
+from .api.endpoints import stocks, auth
 
 app = FastAPI(
-    title=settings.PROJECT_NAME,
-    version=settings.VERSION,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    title="MACD Signal Screener",
+    version="1.0.0",
+    openapi_url="/api/v1/openapi.json"
 )
 
-# Set up CORS
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origins=["http://localhost:5173","https://macdsignal.com"],  # Frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include routers
-app.include_router(stocks.router, prefix=settings.API_V1_STR)
-app.include_router(crypto.router, prefix=settings.API_V1_STR)
+app.include_router(stocks.router, prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1")
 
 @app.get("/")
 async def root():

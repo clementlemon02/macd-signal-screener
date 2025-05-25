@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
-from ...services.supabase_service import supabase_service
-from ...services.macd_service import macd_service
+from app.services.supabase_service import supabase_service
+
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
@@ -33,3 +33,9 @@ async def get_stock_signals(symbol: str, timeframe: str) -> List[Dict[str, Any]]
         return signals
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/latest-update")
+async def get_latest_update():
+    """Get the latest signal update time"""
+    latest_date = await supabase_service.get_latest_signal_date()
+    return {"latest_update": latest_date}

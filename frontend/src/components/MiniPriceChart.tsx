@@ -11,16 +11,16 @@ import React from 'react';
 
 interface MiniPriceChartProps {
   data: PriceData[];
-  days?: number;
   width?: number;
   height?: number;
+  days?: number;
 }
 
-const MiniPriceChart: React.FC<MiniPriceChartProps> = ({ 
+const MiniPriceChart: React.FC<MiniPriceChartProps> = ({
   data,
-  days = 30,
   width = 160,
-  height = 30
+  height = 60,
+  days = 30
 }) => {
   const chartData = [...data].slice(-days);
 
@@ -29,7 +29,7 @@ const MiniPriceChart: React.FC<MiniPriceChartProps> = ({
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart 
           data={chartData}
-          margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+          margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
         >
           <XAxis dataKey="date" hide />
           <YAxis hide domain={['dataMin', 'dataMax']} />
